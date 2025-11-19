@@ -9,6 +9,7 @@ import fitz  # PyMuPDF
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
+    QMessageBox,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -184,16 +185,15 @@ class FieldGraphics:
 
         # Line with glow
         self.line_item = QGraphicsLineItem()
-        pen = QPen(color, 2.0)
+        pen = QPen(color, 3.0)
         pen.setCapStyle(Qt.RoundCap)
         pen.setJoinStyle(Qt.RoundJoin)
         self.line_item.setPen(pen)
 
         effect = QGraphicsDropShadowEffect()
-        effect.setBlurRadius(18)
+        effect.setBlurRadius(6)
         effect.setOffset(0, 0)
-        glow_color = QColor(color)
-        glow_color.setAlpha(160)
+        glow_color = QColor(255, 255, 255, 180)
         effect.setColor(glow_color)
         self.line_item.setGraphicsEffect(effect)
 
@@ -521,6 +521,7 @@ class FormMapperWindow(QMainWindow):
                 )
 
         self.status_label.setText(f"Saved corrected CSV -> {out_path}")
+        QMessageBox.information(self, "Saved", f"Saved corrected CSV to:\n{out_path}")
 
 
 def main():
