@@ -50,27 +50,32 @@ class LabelPill(QGraphicsRectItem):
     """
     Rounded pill + text, movable as a unit.
     """
-    def __init__(self, wrapper, html_text: str, pos: QPointF, text_width: float):
+    def __init__(self, wrapper, field: FieldRow, pos: QPointF, text_width: float):
         super().__init__()
         self.wrapper = wrapper
+        self.text_width = text_width
+        self.padding_x = 12
+        self.padding_y = 8
+        self.gap = 6
+        self.row_prefix = f"{field.row}:"
 
-        # Child text item inside pill
-        self.text_item = QGraphicsTextItem(self)
-        self.text_item.setHtml(html_text)
-        self.text_item.setDefaultTextColor(QColor(15, 35, 80))
-        self.text_item.setTextWidth(text_width)
-
-        # Compute pill rect around text
-        tbr = self.text_item.boundingRect()
-        padding_x = 12
-        padding_y = 8
-        self.setRect(
-            -padding_x,
-            -padding_y,
-            tbr.width() + 2 * padding_x,
-            tbr.height() + 2 * padding_y,
+        # Prefix (non-editable) row number in pink
+        self.prefix_item = QGraphicsTextItem(self)
+        self.prefix_item.setHtml(
+            f'<span style="color:#f9a8d4;font-weight:bold;">{self.row_prefix}</span>'
         )
-        self.text_item.setPos(0, 0)
+
+        # Editable description text
+        self.desc_item = QGraphicsTextItem(self)
+        self.desc_item.setPlainText(field.rich_description)
+        self.desc_item.setDefaultTextColor(QColor(15, 35, 80))
+        self.desc_item.setTextWidth(text_width)
+        self.desc_item.setTextInteractionFlags(Qt.TextEditorInteraction)
+        self.desc_item.setFlag(QGraphicsItem.ItemIsFocusable, True)
+        self.desc_item.document().contentsChanged.connect(self.on_desc_changed)
+
+        # Compute pill rect around combined text
+        self.update_geometry()
 
         # Position pill in scene
         self.setPos(pos)
@@ -82,6 +87,33 @@ class LabelPill(QGraphicsRectItem):
         self.setFlag(QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
         self.setZValue(10)
+
+    def update_geometry(self):
+        prefix_rect = self.prefix_item.boundingRect()
+        self.prefix_item.setPos(0, 0)
+
+        # Position description after prefix
+        self.desc_item.setPos(prefix_rect.width() + self.gap, 0)
+        self.desc_item.setTextWidth(self.text_width)
+        desc_rect = self.desc_item.boundingRect()
+
+        content_width = prefix_rect.width() + self.gap + desc_rect.width()
+        content_height = max(prefix_rect.height(), desc_rect.height())
+
+        self.setRect(
+            -self.padding_x,
+            -self.padding_y,
+            content_width + 2 * self.padding_x,
+            content_height + 2 * self.padding_y,
+        )
+
+    def description_text(self) -> str:
+        return self.desc_item.toPlainText()
+
+    def on_desc_changed(self):
+        self.update_geometry()
+        if self.wrapper is not None:
+            self.wrapper.update_line()
 
     def paint(self, painter, option, widget=None):
         painter.setBrush(self.brush())
@@ -136,14 +168,8 @@ class FieldGraphics:
         self.scale_x = scale_x
         self.scale_y = scale_y
 
-        # Row number in pale pink + description
-        row_html = (
-            f'<span style="color:#f9a8d4;font-weight:bold;">{field.row}:</span> '
-            f'{field.rich_description}'
-        )
-
         # Movable pill + text
-        self.label_pill = LabelPill(self, row_html, label_pos, label_width)
+        self.label_pill = LabelPill(self, field, label_pos, label_width)
         scene.addItem(self.label_pill)
 
         # Box from PDF coords
@@ -199,6 +225,10 @@ class FieldGraphics:
         self.field.x2 = x2_scene / self.scale_x
         self.field.y2 = y2_scene / self.scale_y
 
+    def sync_field_data(self):
+        self.update_from_scene()
+        self.field.rich_description = self.label_pill.description_text().strip()
+
 
 class ZoomableGraphicsView(QGraphicsView):
     """
@@ -241,6 +271,7 @@ class FormMapperWindow(QMainWindow):
         self.scale_x = 1.0
         self.scale_y = 1.0
         self.field_graphics: List[FieldGraphics] = []
+        self.current_zoom = 1.0
 
         self.init_ui()
         self.load_page(0)
@@ -263,6 +294,16 @@ class FormMapperWindow(QMainWindow):
         self.page_spin.setValue(1)
         self.page_spin.valueChanged.connect(self.on_page_changed)
         top_bar.addWidget(self.page_spin)
+
+        zoom_out_btn = QPushButton("-")
+        zoom_out_btn.setFixedWidth(28)
+        zoom_out_btn.clicked.connect(self.zoom_out)
+        top_bar.addWidget(zoom_out_btn)
+
+        zoom_in_btn = QPushButton("+")
+        zoom_in_btn.setFixedWidth(28)
+        zoom_in_btn.clicked.connect(self.zoom_in)
+        top_bar.addWidget(zoom_in_btn)
         top_bar.addStretch()
 
         # Graphics view
@@ -317,12 +358,14 @@ class FormMapperWindow(QMainWindow):
         return fields
 
     def on_page_changed(self, value: int):
+        self.persist_current_page_state()
         self.load_page(value - 1)
 
     def load_page(self, page_index: int):
         self.current_page_index = page_index
         self.scene.clear()
         self.field_graphics.clear()
+        self.reset_zoom()
 
         page = self.doc[page_index]
 
@@ -419,10 +462,28 @@ class FormMapperWindow(QMainWindow):
             f"Loaded page {page_num} with {len(page_fields)} fields"
         )
 
+    def zoom_in(self):
+        factor = 1.25
+        self.current_zoom *= factor
+        self.view.scale(factor, factor)
+
+    def zoom_out(self):
+        factor = 0.8
+        self.current_zoom *= factor
+        self.view.scale(factor, factor)
+
+    def reset_zoom(self):
+        self.view.resetTransform()
+        self.current_zoom = 1.0
+
+    def persist_current_page_state(self):
+        for fg in self.field_graphics:
+            fg.sync_field_data()
+
     def on_submit(self):
         # Sync any moved boxes
         for fg in self.field_graphics:
-            fg.update_from_scene()
+            fg.sync_field_data()
 
         base, ext = os.path.splitext(self.csv_path)
         out_path = base + "_corrected.csv"
