@@ -1,1 +1,3 @@
-This folder contains static files
+This folder contains files used for the front end UI 
+
+1.) agent_assist.png
