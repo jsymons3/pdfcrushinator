@@ -4,6 +4,8 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
+from fastapi.responses import RedirectResponse
+
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/tmp/agent_assist")).resolve()
 SCRIPTS_DIR = Path(os.getenv("SCRIPTS_DIR", "scripts")).resolve()
@@ -27,6 +29,10 @@ OVERLAY = SCRIPTS_DIR / "overlay_fill.py"
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.get("/")
+def root():
+    return RedirectResponse("/t/almir")
+
 jinja = Environment(loader=FileSystemLoader("templates"))
 
 # Token-based profiles (MVP). Create a file: /var/data/profiles/almir.json
@@ -41,6 +47,7 @@ def load_profile(token: str) -> dict:
     if not p.exists():
         raise HTTPException(404, "Unknown token/profile")
     return json.loads(p.read_text(encoding="utf-8"))
+
 
 
 def write_status(job_dir: Path, obj: dict):
