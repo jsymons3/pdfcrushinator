@@ -60,7 +60,7 @@ def set_status(job_dir: Path, state: str, progress: int, message: str, extra: di
 def healthz():
     return {"ok": True}
 
-@app.get("/{token}", response_class=HTMLResponse)
+@app.get("/t/{token}", response_class=HTMLResponse)
 def ui(token: str):
     profile = load_profile(token)
     tpl = jinja.get_template("index.html")
