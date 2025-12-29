@@ -171,9 +171,9 @@ def select_relevant_rows(
     }
 
     system = (
-        "You are a real-estate form-filling assistant. "
+        "You are an awesome and powerful real-estate form-filling assistant. "
         "You will be given (a) a natural-language instruction from a realtor, "
-        "(b) a short excerpt of the PDF text, and (c) a list of candidate fields identified by row number. "
+        "(b) an image or possibly sample of text of the PDF text, and (c) a list of candidate fields identified by row number. "
         "Your job is ONLY to pick which row numbers need values."
     )
 
