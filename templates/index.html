@@ -1,0 +1,1185 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Assist — AI-Powered Document Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg-deep: #050911;
+      --bg-mid: #0a0f1e;
+      --bg-surface: #0f172a;
+      
+      --glass-strong: rgba(255,255,255,.12);
+      --glass-med: rgba(255,255,255,.08);
+      --glass-subtle: rgba(255,255,255,.04);
+      
+      --border-strong: rgba(255,255,255,.18);
+      --border-med: rgba(255,255,255,.12);
+      --border-subtle: rgba(255,255,255,.06);
+      
+      --text-primary: rgba(255,255,255,.98);
+      --text-secondary: rgba(255,255,255,.72);
+      --text-tertiary: rgba(255,255,255,.52);
+      
+      --accent-blue: #60a5fa;
+      --accent-purple: #a78bfa;
+      --accent-cyan: #22d3ee;
+      --accent-pink: #f472b6;
+      
+      --success: #34d399;
+      --error: #f87171;
+      --warning: #fbbf24;
+      
+      --shadow-sm: 0 2px 8px rgba(0,0,0,.3);
+      --shadow-md: 0 8px 24px rgba(0,0,0,.4);
+      --shadow-lg: 0 20px 60px rgba(0,0,0,.5);
+      --shadow-xl: 0 32px 80px rgba(0,0,0,.6);
+      
+      --radius-sm: 1px;
+      --radius-md: 2px;
+      --radius-lg: 3px;
+      --radius-xl: 4px;
+    }
+    
+    *{ 
+      box-sizing:border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body{
+      color: var(--text-primary);
+      font-family: 'Outfit', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      font-weight: 400;
+      background: var(--bg-deep);
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+    
+    /* Animated gradient background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: 
+        radial-gradient(ellipse 1400px 700px at 20% 10%, rgba(96,165,250,.15), transparent 50%),
+        radial-gradient(ellipse 1200px 600px at 80% 20%, rgba(167,139,250,.12), transparent 55%),
+        radial-gradient(ellipse 1000px 800px at 50% 90%, rgba(34,211,238,.08), transparent 60%);
+      animation: gradientShift 20s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+    
+    @keyframes gradientShift {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      33% { transform: translate(5%, -5%) rotate(2deg); }
+      66% { transform: translate(-5%, 5%) rotate(-2deg); }
+    }
+    
+    /* Grain texture overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      opacity: 0.5;
+      z-index: 1;
+    }
+    
+    .content-wrapper {
+      position: relative;
+      z-index: 2;
+    }
+    
+    .container { 
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 24px 60px;
+    }
+    
+    /* Header with enhanced styling */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 40px;
+      gap: 20px;
+      opacity: 0;
+      animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+    }
+    
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .brand {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    
+    .brand-icon {
+      position: relative;
+      width: 68px;
+      height: 68px;
+      border-radius: 0px;
+      overflow: hidden;
+      box-shadow: 
+        var(--shadow-md),
+        0 0 0 1px rgba(255,255,255,.1),
+        inset 0 1px 0 rgba(255,255,255,.1);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    
+    .brand-icon:hover {
+      transform: scale(1.05);
+    }
+    
+    .brand-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .brand-text h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 4px 0;
+      background: linear-gradient(135deg, var(--text-primary), var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .brand-text .tagline {
+      font-size: 14px;
+      color: var(--text-tertiary);
+      font-weight: 400;
+      letter-spacing: 0.01em;
+    }
+    
+    .header-info {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .info-pill {
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid var(--border-med);
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.01em;
+    }
+    
+    .info-pill:hover {
+      background: rgba(0,0,0,.45);
+      border-color: var(--border-strong);
+    }
+    
+    .info-pill strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    /* Main grid layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 24px;
+      align-items: start;
+    }
+    
+    /* Card system with enhanced depth */
+    .card {
+      background: linear-gradient(135deg, var(--glass-strong) 0%, var(--glass-subtle) 100%);
+      border: 1px solid var(--border-med);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      overflow: hidden;
+      position: relative;
+      opacity: 0;
+      animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, 
+        transparent,
+        rgba(255,255,255,.2) 30%,
+        rgba(255,255,255,.2) 70%,
+        transparent
+      );
+      opacity: 0.5;
+    }
+    
+    .card.primary {
+      animation-delay: 0.2s;
+    }
+    
+    .card.secondary {
+      animation-delay: 0.3s;
+    }
+    
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0,0,0,.15);
+    }
+    
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .card-title::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 12px var(--accent-cyan);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+    
+    .card-badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      background: rgba(96,165,250,.1);
+      color: var(--accent-blue);
+      border: 1px solid rgba(96,165,250,.2);
+    }
+    
+    .card-body {
+      padding: 24px;
+    }
+    
+    /* Command section */
+    .instruction-area {
+      margin-bottom: 20px;
+    }
+    
+    .instruction-label {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    
+    .instruction-label strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      resize: vertical;
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      border: 1px solid var(--border-med);
+      background: rgba(0,0,0,.3);
+      color: var(--text-primary);
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 400;
+      line-height: 1.6;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+    
+    textarea::placeholder {
+      color: var(--text-tertiary);
+    }
+    
+    textarea:focus {
+      border-color: var(--accent-cyan);
+      background: rgba(0,0,0,.4);
+      box-shadow: 
+        0 0 0 3px rgba(34,211,238,.1),
+        0 8px 24px rgba(0,0,0,.3);
+    }
+    
+    /* Button system */
+    .action-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border: 1px solid var(--border-med);
+      background: rgba(255,255,255,.06);
+      color: var(--text-primary);
+      position: relative;
+      overflow: hidden;
+      font-family: 'Outfit', sans-serif;
+    }
+    
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255,255,255,.1);
+      transform: translate(-50%, -50%);
+      transition: width 0.4s ease, height 0.4s ease;
+    }
+    
+    .btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .btn span {
+      position: relative;
+      z-index: 1;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      border-color: rgba(255,255,255,.2);
+      color: white;
+      font-weight: 700;
+      box-shadow: 
+        var(--shadow-md),
+        0 0 20px rgba(96,165,250,.3);
+    }
+    
+    .btn-primary:hover {
+      box-shadow: 
+        var(--shadow-lg),
+        0 0 30px rgba(96,165,250,.4);
+      transform: translateY(-3px);
+    }
+    
+    .btn-danger {
+      background: rgba(248,113,113,.12);
+      border-color: rgba(248,113,113,.3);
+      color: var(--error);
+    }
+    
+    .btn-danger:hover {
+      background: rgba(248,113,113,.2);
+      border-color: rgba(248,113,113,.5);
+    }
+    
+    .hint-text {
+      color: var(--text-tertiary);
+      font-size: 13px;
+      font-style: italic;
+    }
+    
+    input[type=file] {
+      display: none;
+    }
+    
+    /* Progress card */
+    .progress-card {
+      background: rgba(0,0,0,.25);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    
+    .progress-header {
+      padding: 16px 20px;
+      background: rgba(0,0,0,.2);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .progress-body {
+      padding: 20px;
+    }
+    
+    .progress-bar-wrapper {
+      position: relative;
+      width: 100%;
+      height: 8px;
+      background: rgba(255,255,255,.06);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+      border-radius: 999px;
+      transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      box-shadow: 0 0 20px rgba(34,211,238,.5);
+    }
+    
+    .progress-bar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, 
+        transparent,
+        rgba(255,255,255,.3),
+        transparent
+      );
+      animation: shimmer 2s infinite;
+    }
+    
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    
+    .status-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .status-badge.idle {
+      background: rgba(148,163,184,.15);
+      color: #94a3b8;
+      border: 1px solid rgba(148,163,184,.3);
+    }
+    
+    .status-badge.running {
+      background: rgba(34,211,238,.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(34,211,238,.3);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .status-badge.done {
+      background: rgba(52,211,153,.15);
+      color: var(--success);
+      border: 1px solid rgba(52,211,153,.3);
+    }
+    
+    .status-badge.error {
+      background: rgba(248,113,113,.15);
+      color: var(--error);
+      border: 1px solid rgba(248,113,113,.3);
+    }
+    
+    .download-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    
+    .download-links a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(34,211,238,.2);
+      background: rgba(34,211,238,.08);
+      transition: all 0.2s ease;
+    }
+    
+    .download-links a:hover {
+      background: rgba(34,211,238,.15);
+      border-color: rgba(34,211,238,.4);
+      transform: translateY(-1px);
+    }
+    
+    .error-notice {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      background: rgba(248,113,113,.08);
+      border: 1px solid rgba(248,113,113,.2);
+    }
+    
+    .error-notice .error-title {
+      color: var(--error);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    
+    .error-notice .error-text {
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    
+    /* Library section */
+    .library-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .library-card {
+      background: rgba(0,0,0,.2);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    
+    .library-card-header {
+      padding: 16px 20px;
+      background: rgba(0,0,0,.2);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .library-card-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    
+    .count-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(167,139,250,.12);
+      color: var(--accent-purple);
+      border: 1px solid rgba(167,139,250,.2);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .library-card-body {
+      padding: 16px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    
+    /* Custom scrollbar */
+    .library-card-body::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .library-card-body::-webkit-scrollbar-track {
+      background: rgba(0,0,0,.2);
+    }
+    
+    .library-card-body::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,.1);
+      border-radius: 999px;
+    }
+    
+    .library-card-body::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,255,255,.15);
+    }
+    
+    .item-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      background: rgba(0,0,0,.25);
+      border: 1px solid var(--border-subtle);
+      transition: all 0.2s ease;
+    }
+    
+    .list-item:hover {
+      background: rgba(0,0,0,.35);
+      border-color: var(--border-med);
+      transform: translateX(4px);
+    }
+    
+    .item-info .item-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    
+    .item-info .item-meta {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .item-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    
+    .item-actions .btn {
+      padding: 8px 14px;
+      font-size: 12px;
+    }
+    
+    /* Profile display */
+    .profile-info {
+      font-size: 14px;
+      line-height: 1.8;
+    }
+    
+    .profile-info .profile-name {
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    
+    .profile-info .profile-brokerage {
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+    
+    .profile-info .profile-section {
+      margin-top: 12px;
+    }
+    
+    .profile-info .profile-label {
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    
+    .profile-info .profile-value {
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+    
+    /* Empty state */
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: 14px;
+    }
+    
+    .empty-state::before {
+      content: '✨';
+      display: block;
+      font-size: 32px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 1200px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .card.secondary {
+        animation-delay: 0.4s;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .container {
+        padding: 20px 16px 40px;
+      }
+      
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+      }
+      
+      .header-info {
+        width: 100%;
+      }
+      
+      .info-pill {
+        flex: 1;
+        min-width: 140px;
+        text-align: center;
+      }
+      
+      .brand-text h1 {
+        font-size: 24px;
+      }
+      
+      .action-row {
+        flex-direction: column;
+        width: 100%;
+      }
+      
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .download-links {
+        flex-direction: column;
+      }
+      
+      .download-links a {
+        width: 100%;
+        text-align: center;
+      }
+    }
+    
+    /* Loading animation */
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.1);
+      border-top-color: var(--accent-cyan);
+      border-radius: 50%;
+      animation: rotate 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="content-wrapper">
+    <div class="container">
+      <header>
+        <div class="brand">
+          <div class="brand-icon">
+            <img src="agent_assist.png" alt="Agent Assist logo"/>
+          </div>
+          <div class="brand-text">
+            <h1>Agent Assist</h1>
+            <div class="tagline">AI-Powered Document Intelligence · Pixel-Perfect Form Filling</div>
+          </div>
+        </div>
+        <div class="header-info">
+          <div class="info-pill">
+            <span>Profile: <strong id="profileName">{{ profile_name }}</strong></span>
+          </div>
+          <div class="info-pill">
+            <span>Token: <strong>{{ token }}</strong></span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-grid">
+        <!-- Command Panel -->
+        <div class="card primary">
+          <div class="card-header">
+            <div class="card-title">Command Center</div>
+            <div class="card-badge" id="selectedPdfBadge">No PDF selected</div>
+          </div>
+          <div class="card-body">
+            <div class="instruction-area">
+              <div class="instruction-label">
+                Select a saved PDF or upload a new one, then describe what you need. 
+                <strong>Agent Assist</strong> will handle the rest.
+              </div>
+              
+              <textarea 
+                id="instruction" 
+                placeholder="Fill out this buyer-broker agreement for Jane Doe at 123 Main Street, listing price $450,000..."
+              ></textarea>
+            </div>
+
+            <div class="action-row">
+              <label class="btn" for="pdfUpload">
+                <span>📎 Upload PDF</span>
+              </label>
+              <input id="pdfUpload" type="file" accept="application/pdf"/>
+              
+              <button class="btn btn-primary" id="runBtn">
+                <span>▶ Run Agent</span>
+              </button>
+              
+              <span class="hint-text" id="hint">New PDFs may require mapping confirmation</span>
+            </div>
+
+            <div class="progress-card">
+              <div class="progress-header">
+                <div class="card-title">Progress</div>
+                <div class="status-badge idle" id="jobState">Idle</div>
+              </div>
+              <div class="progress-body">
+                <div class="progress-bar-wrapper">
+                  <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+                
+                <div class="status-text" id="statusText">Waiting for command...</div>
+                
+                <div class="download-links" id="downloads" style="display:none;">
+                  <a id="dlPdf" href="#" target="_blank">📄 Download PDF</a>
+                  <a id="dlJson" href="#" target="_blank">📊 Download JSON</a>
+                </div>
+                
+                <div class="error-notice" id="needsMapping" style="display:none;">
+                  <div class="error-title">⚠️ Mapping Required</div>
+                  <div class="error-text">
+                    This PDF needs field mapping confirmation. Download the annotated PDF and rich map, 
+                    confirm the mappings locally, then re-run the agent.
+                  </div>
+                  <div class="download-links" style="margin-top: 12px;">
+                    <a id="dlAnnotated" href="#" target="_blank">📝 Annotated PDF</a>
+                    <a id="dlRichMap" href="#" target="_blank">🗺️ Rich Map CSV</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Library Panel -->
+        <div class="card secondary">
+          <div class="card-header">
+            <div class="card-title">Library</div>
+            <div class="card-badge">Assets & History</div>
+          </div>
+          <div class="card-body">
+            <div class="library-grid">
+              <!-- Saved PDFs -->
+              <div class="library-card">
+                <div class="library-card-header">
+                  <div class="library-card-title">Saved PDFs</div>
+                  <div class="count-badge" id="pdfCount">0</div>
+                </div>
+                <div class="library-card-body">
+                  <div class="item-list" id="pdfList">
+                    <div class="empty-state">No PDFs saved yet</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- User Profile -->
+              <div class="library-card">
+                <div class="library-card-header">
+                  <div class="library-card-title">User Profile</div>
+                  <div class="count-badge" id="profileBadge">Loaded</div>
+                </div>
+                <div class="library-card-body">
+                  <div class="profile-info" id="profilePane">
+                    <div class="empty-state">Loading profile...</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Completed Jobs -->
+              <div class="library-card">
+                <div class="library-card-header">
+                  <div class="library-card-title">Completed</div>
+                  <div class="count-badge" id="doneCount">0</div>
+                </div>
+                <div class="library-card-body">
+                  <div class="item-list" id="doneList">
+                    <div class="empty-state">No completed jobs yet</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const token = "{{ token }}";
+  let selectedPdfId = null;
+  let uploadedFile = null;
+
+  const el = (id) => document.getElementById(id);
+
+  function setSelectedBadge(text) {
+    el("selectedPdfBadge").textContent = text;
+    el("selectedPdfBadge").style.animation = 'pulse 0.5s ease';
+    setTimeout(() => el("selectedPdfBadge").style.animation = '', 500);
+  }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(t || ("HTTP " + res.status));
+    }
+    return res;
+  }
+
+  function renderPdfItem(pdf) {
+    const div = document.createElement("div");
+    div.className = "list-item";
+    div.innerHTML = `
+      <div class="item-info">
+        <div class="item-name">${pdf.name}</div>
+        <div class="item-meta">${pdf.id}</div>
+      </div>
+      <div class="item-actions">
+        <button class="btn" data-pick="${pdf.id}">Select</button>
+        <a class="btn" href="/api/library/${token}/pdf/${pdf.id}" target="_blank">View</a>
+      </div>
+    `;
+    div.querySelector("[data-pick]").onclick = () => {
+      selectedPdfId = pdf.id;
+      uploadedFile = null;
+      setSelectedBadge("Selected: " + pdf.name);
+    };
+    return div;
+  }
+
+  function renderDoneItem(doc) {
+    const div = document.createElement("div");
+    div.className = "list-item";
+    const date = new Date(doc.created_at * 1000).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    div.innerHTML = `
+      <div class="item-info">
+        <div class="item-name">${doc.title}</div>
+        <div class="item-meta">${date}</div>
+      </div>
+      <div class="item-actions">
+        <a class="btn" href="${doc.pdf_url}" target="_blank">PDF</a>
+        <a class="btn" href="${doc.json_url}" target="_blank">JSON</a>
+        <button class="btn btn-danger" data-del="${doc.id}">Delete</button>
+      </div>
+    `;
+    div.querySelector("[data-del]").onclick = async () => {
+      if (confirm('Delete this completed job?')) {
+        await api(`/api/completed/${token}/${doc.id}`, { method: "DELETE" });
+        await refreshAll();
+      }
+    };
+    return div;
+  }
+
+  async function refreshAll() {
+    try {
+      // PDFs
+      const pdfs = await (await api(`/api/library/${token}`)).json();
+      const pdfList = el("pdfList");
+      pdfList.innerHTML = "";
+      el("pdfCount").textContent = pdfs.length;
+      
+      if (pdfs.length === 0) {
+        pdfList.innerHTML = '<div class="empty-state">No PDFs saved yet</div>';
+      } else {
+        pdfs.forEach(p => pdfList.appendChild(renderPdfItem(p)));
+      }
+
+      // Profile
+      const profile = await (await api(`/api/profile/${token}`)).json();
+      el("profilePane").innerHTML = `
+        <div class="profile-name">${profile.agent_name}</div>
+        <div class="profile-brokerage">${profile.brokerage}</div>
+        <div class="profile-section">
+          <div class="profile-label">Default Settings</div>
+          <div class="profile-value">
+            Fee: ${profile.default_fee || 'Not set'} · 
+            Retainer: ${profile.default_retainer || 'Not set'} · 
+            Dual Agency: ${profile.default_dual_agency || 'Not set'}
+          </div>
+        </div>
+      `;
+
+      // Completed
+      const done = await (await api(`/api/completed/${token}`)).json();
+      const doneList = el("doneList");
+      doneList.innerHTML = "";
+      el("doneCount").textContent = done.length;
+      
+      if (done.length === 0) {
+        doneList.innerHTML = '<div class="empty-state">No completed jobs yet</div>';
+      } else {
+        done.forEach(d => doneList.appendChild(renderDoneItem(d)));
+      }
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+    }
+  }
+
+  el("pdfUpload").addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (f) {
+      uploadedFile = f;
+      selectedPdfId = null;
+      setSelectedBadge("📤 " + f.name);
+    }
+  });
+
+  function updateProgressBar(percent) {
+    el("progressBar").style.width = percent + "%";
+  }
+
+  function updateJobState(state) {
+    const badge = el("jobState");
+    badge.className = "status-badge " + state.toLowerCase();
+    badge.textContent = state;
+  }
+
+  async function poll(job_id) {
+    el("downloads").style.display = "none";
+    el("needsMapping").style.display = "none";
+
+    const timer = setInterval(async () => {
+      try {
+        const s = await (await api(`/api/jobs/${token}/${job_id}/status`)).json();
+        updateJobState(s.state);
+        updateProgressBar(s.progress || 0);
+        el("statusText").textContent = s.message || s.state;
+
+        if (s.state === "done") {
+          clearInterval(timer);
+          el("downloads").style.display = "flex";
+          el("dlPdf").href = s.pdf_url;
+          el("dlJson").href = s.json_url;
+          await refreshAll();
+        } else if (s.state === "needs_mapping") {
+          clearInterval(timer);
+          el("needsMapping").style.display = "block";
+          el("dlAnnotated").href = s.annotated_url;
+          el("dlRichMap").href = s.rich_map_url;
+          await refreshAll();
+        } else if (s.state === "error") {
+          clearInterval(timer);
+          el("statusText").innerHTML = `<span style="color: var(--error)">Error:</span> ${s.message || "Unknown error"}`;
+        }
+      } catch (err) {
+        clearInterval(timer);
+        el("statusText").innerHTML = `<span style="color: var(--error)">Error:</span> ${err.message}`;
+        updateJobState("error");
+      }
+    }, 1500);
+  }
+
+  el("runBtn").onclick = async () => {
+    const instruction = el("instruction").value.trim();
+    if (!instruction) {
+      alert("Please enter an instruction.");
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("instruction", instruction);
+
+    if (uploadedFile) {
+      fd.append("pdf", uploadedFile);
+    } else if (selectedPdfId) {
+      fd.append("pdf_id", selectedPdfId);
+    } else {
+      alert("Select a saved PDF or upload a new one.");
+      return;
+    }
+
+    updateJobState("starting");
+    updateProgressBar(2);
+    el("statusText").textContent = "Starting job...";
+
+    try {
+      const res = await api(`/api/jobs/${token}`, { method: "POST", body: fd });
+      const { job_id } = await res.json();
+      await poll(job_id);
+    } catch (err) {
+      el("statusText").innerHTML = `<span style="color: var(--error)">Error:</span> ${err.message}`;
+      updateJobState("error");
+    }
+  };
+
+  // Initialize
+  refreshAll();
+</script>
+</body>
+</html>
