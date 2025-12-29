@@ -5,6 +5,8 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 from fastapi.responses import RedirectResponse
+import sys
+import subprocess
 
 
 DATA_DIR = Path(os.getenv("DATA_DIR", "/tmp/agent_assist")).resolve()
@@ -16,6 +18,7 @@ MAPPINGS_DIR = DATA_DIR / "mappings"
 JOBS_DIR     = DATA_DIR / "jobs"
 DONE_DIR     = DATA_DIR / "completed"
 
+    
 for d in [PROFILES_DIR, LIBRARY_DIR, MAPPINGS_DIR, JOBS_DIR, DONE_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
@@ -185,17 +188,25 @@ async def create_job(
                 set_status(job_dir, "running", 18, "Extracting fields…")
 
                 # TODO: adjust CLI args to match your scripts
+                #r1 = subprocess.run(
+                #    ["python", str(EXTRACT), "--pdf", str(input_pdf_path), "--outdir", str(map_dir)],
+                #    capture_output=True, text=True
+                #)
                 r1 = subprocess.run(
-                    ["python", str(EXTRACT), "--pdf", str(input_pdf_path), "--outdir", str(map_dir)],
-                    capture_output=True, text=True
+                [sys.executable, str(EXTRACT), "--pdf", str(input_pdf_path), "--outdir", str(map_dir)],
+                capture_output=True, text=True
                 )
                 if r1.returncode != 0:
                     raise RuntimeError(f"extract_form_fields failed:\n{r1.stderr}\n{r1.stdout}")
 
                 set_status(job_dir, "running", 38, "Labeling fields with vision…")
+                #r2 = subprocess.run(
+                #    ["python", str(LABEL), "--annotated", str(annotated), "--map", str(map_csv), "--out", str(rich_csv)],
+                #    capture_output=True, text=True
+                #)
                 r2 = subprocess.run(
-                    ["python", str(LABEL), "--annotated", str(annotated), "--map", str(map_csv), "--out", str(rich_csv)],
-                    capture_output=True, text=True
+                [sys.executable, str(LABEL), "--annotated", str(annotated), "--map", str(map_csv), "--out", str(rich_csv)],
+                capture_output=True, text=True
                 )
                 if r2.returncode != 0:
                     raise RuntimeError(f"label_from_vision failed:\n{r2.stderr}\n{r2.stdout}")
@@ -217,8 +228,9 @@ async def create_job(
             set_status(job_dir, "running", 55, "Generating fill JSON…")
             fill_json = job_dir / "fill_plan.json"
 
+
             r3 = subprocess.run(
-                ["python", str(GENFILL),
+                [sys.executable, str(GENFILL),
                  "--csv", str(rich_csv),
                  "--pdf", str(input_pdf_path),
                  "--instruction", merged,
@@ -232,8 +244,9 @@ async def create_job(
             filled_pdf = job_dir / "filled.pdf"
 
             # Adjust args to your overlay_fill.py
+
             r4 = subprocess.run(
-                ["python", str(OVERLAY),
+                [sys.executable, str(OVERLAY),
                  "--pdf", str(input_pdf_path),
                  "--json", str(fill_json),
                  "--out", str(filled_pdf)],
