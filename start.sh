@@ -19,4 +19,3 @@ fi
 
 # Start the web server
 exec uvicorn app:app --host 0.0.0.0 --port "${PORT}" --no-access-log
-v
