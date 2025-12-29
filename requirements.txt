@@ -4,3 +4,4 @@ python-multipart==0.0.9
 openai>=1.40.0
 pdfplumber==0.11.4
 jinja2==3.1.4
+PyMuPDF==1.24.10
