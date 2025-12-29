@@ -30,11 +30,18 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 jinja = Environment(loader=FileSystemLoader("templates"))
 
 # Token-based profiles (MVP). Create a file: /var/data/profiles/almir.json
+PROFILES_DIR = Path(os.getenv("PROFILES_DIR", str(DATA_DIR / "profiles")))
+
+FALLBACK_PROFILES_DIR = Path("profiles")
+
 def load_profile(token: str) -> dict:
     p = PROFILES_DIR / f"{token}.json"
     if not p.exists():
+        p = FALLBACK_PROFILES_DIR / f"{token}.json"
+    if not p.exists():
         raise HTTPException(404, "Unknown token/profile")
     return json.loads(p.read_text(encoding="utf-8"))
+
 
 def write_status(job_dir: Path, obj: dict):
     (job_dir / "status.json").write_text(json.dumps(obj, indent=2), encoding="utf-8")
