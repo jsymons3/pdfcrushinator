@@ -179,6 +179,10 @@ async def create_job(
             map_dir = MAPPINGS_DIR / pdf_id_local
             map_dir.mkdir(parents=True, exist_ok=True)
 
+            input_stem = input_pdf_path.stem
+            script_map_csv = input_pdf_path.with_name(f"{input_stem}_map.csv")
+            script_annotated = input_pdf_path.with_name(f"{input_stem}_annotated.pdf")
+
             annotated = map_dir / "annotated.pdf"
             map_csv   = map_dir / "map.csv"
             rich_csv  = map_dir / "map_rich.csv"
@@ -193,11 +197,18 @@ async def create_job(
                 #    capture_output=True, text=True
                 #)
                 r1 = subprocess.run(
-                [sys.executable, str(EXTRACT), "--pdf", str(input_pdf_path), "--outdir", str(map_dir)],
-                capture_output=True, text=True
+                    [sys.executable, str(EXTRACT), str(input_pdf_path)],
+                    capture_output=True,
+                    text=True,
                 )
                 if r1.returncode != 0:
                     raise RuntimeError(f"extract_form_fields failed:\n{r1.stderr}\n{r1.stdout}")
+
+                try:
+                    shutil.copyfile(script_map_csv, map_csv)
+                    shutil.copyfile(script_annotated, annotated)
+                except FileNotFoundError as e:
+                    raise RuntimeError(f"Expected mapping output missing: {e.filename}") from e
 
                 set_status(job_dir, "running", 38, "Labeling fields with vision…")
                 #r2 = subprocess.run(
