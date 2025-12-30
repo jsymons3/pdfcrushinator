@@ -782,12 +782,12 @@
   <!-- Static header bar -->
   <div class="header-bar">
     <div class="header-logo">
-      <img src="agent_assist.png" alt="AI Agent logo"/>
+      <img src="/static/agent_assist.png" alt="AI Agent logo"/>
       <div class="header-title">Agent Assist</div>
     </div>
     <div class="header-info">
       <div class="info-badge">
-        <span>Profile: <strong id="profileName">Loading...</strong></span>
+        <span>Profile: <strong id="profileName">{{ profile_name }}</strong></span>
       </div>
       <div class="info-badge">
         <span>Session: <strong>Active</strong></span>
@@ -916,8 +916,8 @@
   </div>
 
 <script>
-  // For now, use a demo token. In production, implement real auth.
-  const token = "demo-token";
+  // Token is provided by the backend when rendering this page.
+  const token = {{ token | tojson }};
   let selectedPdfId = null;
   let uploadedFile = null;
 
