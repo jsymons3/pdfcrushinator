@@ -943,18 +943,29 @@
     div.className = "list-item";
     div.innerHTML = `
       <div class="item-info">
-        <div class="item-name">${pdf.name}</div>
+        <div class="item-name">${pdf.display_name || pdf.name || pdf.id}</div>
         <div class="item-meta">${pdf.id}</div>
       </div>
       <div class="item-actions">
         <button class="btn btn-secondary" data-pick="${pdf.id}">Select</button>
         <a class="btn btn-secondary" href="/api/library/${token}/pdf/${pdf.id}" target="_blank">View</a>
+        <button class="btn btn-danger" data-del="${pdf.id}">Delete</button>
       </div>
     `;
     div.querySelector("[data-pick]").onclick = () => {
       selectedPdfId = pdf.id;
       uploadedFile = null;
-      setSelectedBadge("Selected: " + pdf.name);
+      setSelectedBadge("Selected: " + (pdf.display_name || pdf.name || pdf.id));
+    };
+    div.querySelector("[data-del]").onclick = async () => {
+      if (confirm('Delete this PDF?')) {
+        await api(`/api/pdfs/${token}/${pdf.id}`, { method: "DELETE" });
+        if (selectedPdfId === pdf.id) {
+          selectedPdfId = null;
+          setSelectedBadge("No PDF selected");
+        }
+        await refreshAll();
+      }
     };
     return div;
   }

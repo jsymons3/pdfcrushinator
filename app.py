@@ -52,6 +52,42 @@ def load_profile(token: str) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def sanitize_filename(name: str | None) -> str:
+    candidate = Path(name or "uploaded.pdf").name
+    return candidate or "uploaded.pdf"
+
+
+def resolve_library_pdf(pdf_id: str) -> tuple[Path | None, str | None]:
+    """
+    Returns (pdf_path, display_name) for a library entry.
+    Supports both the new directory-based format (id/meta.json + PDF)
+    and the legacy flat-file format (<id>.pdf).
+    """
+    pdf_dir = LIBRARY_DIR / pdf_id
+    if pdf_dir.is_dir():
+        meta_path = pdf_dir / "meta.json"
+        display_name = None
+        stored_name = None
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            display_name = meta.get("display_name") or meta.get("original_name")
+            stored_name = meta.get("stored_name")
+
+        pdf_path = pdf_dir / stored_name if stored_name else None
+        if not pdf_path or not pdf_path.exists():
+            pdf_candidates = sorted(pdf_dir.glob("*.pdf"))
+            pdf_path = pdf_candidates[0] if pdf_candidates else None
+            if pdf_path and not display_name:
+                display_name = pdf_path.name
+
+        return pdf_path, display_name
+
+    legacy = LIBRARY_DIR / f"{pdf_id}.pdf"
+    if legacy.exists():
+        return legacy, legacy.name
+
+    return None, None
+
 
 def write_status(job_dir: Path, obj: dict):
     (job_dir / "status.json").write_text(json.dumps(obj, indent=2), encoding="utf-8")
@@ -91,16 +127,39 @@ def api_profile(token: str):
 def api_library(token: str):
     load_profile(token)
     out = []
-    for p in sorted(LIBRARY_DIR.glob("*.pdf")):
-        out.append({"id": p.stem, "name": p.name})
+    for entry in sorted(LIBRARY_DIR.iterdir()):
+        if entry.is_dir():
+            pdf_path, display_name = resolve_library_pdf(entry.name)
+            if not pdf_path:
+                continue
+            out.append({"id": entry.name, "display_name": display_name or pdf_path.name})
+        elif entry.suffix == ".pdf":
+            out.append({"id": entry.stem, "display_name": entry.name})
     return out
 
 @app.get("/api/library/{token}/pdf/{pdf_id}")
 def api_library_pdf(token: str, pdf_id: str):
     load_profile(token)
-    p = LIBRARY_DIR / f"{pdf_id}.pdf"
-    if not p.exists(): raise HTTPException(404, "PDF not found")
+    p, _ = resolve_library_pdf(pdf_id)
+    if not p: raise HTTPException(404, "PDF not found")
     return FileResponse(str(p), media_type="application/pdf", filename=p.name)
+
+@app.delete("/api/pdfs/{token}/{pdf_id}")
+def api_library_delete(token: str, pdf_id: str):
+    load_profile(token)
+    # Remove saved PDF (directory or legacy file)
+    pdf_dir = LIBRARY_DIR / pdf_id
+    if pdf_dir.is_dir():
+        shutil.rmtree(pdf_dir, ignore_errors=True)
+    else:
+        legacy_pdf = LIBRARY_DIR / f"{pdf_id}.pdf"
+        if legacy_pdf.exists():
+            legacy_pdf.unlink()
+    # Optionally remove mappings
+    map_dir = MAPPINGS_DIR / pdf_id
+    if map_dir.exists():
+        shutil.rmtree(map_dir, ignore_errors=True)
+    return {"ok": True}
 
 @app.get("/api/completed/{token}")
 def api_completed_list(token: str):
@@ -147,16 +206,32 @@ async def create_job(
     if pdf is not None:
         b = await pdf.read()
         input_pdf_path.write_bytes(b)
-        input_name = pdf.filename or "uploaded.pdf"
+        input_name = sanitize_filename(pdf.filename)
         resolved_pdf_id = sha1_bytes(b)[:16]   # stable-ish id
-        # optionally save to library
-        (LIBRARY_DIR / f"{resolved_pdf_id}.pdf").write_bytes(b)
+        # Save to library with original filename + metadata
+        pdf_dir = LIBRARY_DIR / resolved_pdf_id
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        library_pdf_path = pdf_dir / input_name
+        library_pdf_path.write_bytes(b)
+        meta_path = pdf_dir / "meta.json"
+        meta_path.write_text(
+            json.dumps(
+                {
+                    "id": resolved_pdf_id,
+                    "display_name": input_name,
+                    "stored_name": library_pdf_path.name,
+                    "original_name": pdf.filename or input_name,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     else:
-        p = LIBRARY_DIR / f"{pdf_id}.pdf"
-        if not p.exists():
+        p, display_name = resolve_library_pdf(pdf_id)
+        if not p:
             raise HTTPException(404, "Unknown pdf_id")
         shutil.copyfile(p, input_pdf_path)
-        input_name = p.name
+        input_name = display_name or p.name
         resolved_pdf_id = pdf_id
 
     # merged instruction with profile defaults
