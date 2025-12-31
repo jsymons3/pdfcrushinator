@@ -268,10 +268,16 @@ async def create_job(
             # Adjust args to your overlay_fill.py
 
             r4 = subprocess.run(
-                [sys.executable, str(OVERLAY),
-                 "--pdf", str(input_pdf_path),
-                 "--json", str(fill_json),
-                 "--out", str(filled_pdf)],
+                [
+                    sys.executable,
+                    str(OVERLAY),
+                    "--pdf-in",
+                    str(input_pdf_path),
+                    "--json-map",
+                    str(fill_json),
+                    "--pdf-out",
+                    str(filled_pdf),
+                ],
                 capture_output=True, text=True
             )
             if r4.returncode != 0:
