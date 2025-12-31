@@ -216,11 +216,22 @@ async def create_job(
                 #    capture_output=True, text=True
                 #)
                 r2 = subprocess.run(
-                [sys.executable, str(LABEL), "--annotated", str(annotated), "--map", str(map_csv), "--out", str(rich_csv)],
-                capture_output=True, text=True
+                    [sys.executable, str(LABEL), str(annotated), str(map_csv)],
+                    capture_output=True,
+                    text=True,
                 )
                 if r2.returncode != 0:
                     raise RuntimeError(f"label_from_vision failed:\n{r2.stderr}\n{r2.stdout}")
+
+                # label_from_vision writes <csv_stem>_rich.csv next to the input CSV
+                produced_rich = map_csv.with_name(map_csv.stem + "_rich.csv")
+                if not produced_rich.exists():
+                    raise RuntimeError(f"label_from_vision did not produce expected file: {produced_rich}")
+                # Normalize to our standard filename
+                if produced_rich != rich_csv:
+                    shutil.copyfile(produced_rich, rich_csv)
+                else:
+                    rich_csv = produced_rich
 
                 # We cannot run form_mapper_gui in the cloud.
                 set_status(
@@ -257,10 +268,16 @@ async def create_job(
             # Adjust args to your overlay_fill.py
 
             r4 = subprocess.run(
-                [sys.executable, str(OVERLAY),
-                 "--pdf", str(input_pdf_path),
-                 "--json", str(fill_json),
-                 "--out", str(filled_pdf)],
+                [
+                    sys.executable,
+                    str(OVERLAY),
+                    "--pdf-in",
+                    str(input_pdf_path),
+                    "--json-map",
+                    str(fill_json),
+                    "--pdf-out",
+                    str(filled_pdf),
+                ],
                 capture_output=True, text=True
             )
             if r4.returncode != 0:
