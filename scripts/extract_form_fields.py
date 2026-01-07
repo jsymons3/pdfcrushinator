@@ -5,11 +5,12 @@ Usage:  python extract_form.py path/to/form.pdf
 """
 
 import sys, os, csv, fitz  # PyMuPDF ≥ 1.23.21
+from collections import defaultdict
 
 # ----------------------------------------------------------------------
 def get_widget_label(doc, page, w, max_dist=200, vert_pad=2):
     """
-    Return the most human‑readable label for `w`:
+    Return the most human-readable label for `w`:
       1) /TU (tooltip / alternate text) if present
       2) Static text immediately left of the widget
       3) widget.field_name  (/T) as a last resort
@@ -24,96 +25,142 @@ def get_widget_label(doc, page, w, max_dist=200, vert_pad=2):
             # find first '(' after /TU
             start = raw.find(b"(", start) + 1
             end   = raw.find(b")", start)
-            tooltip = raw[start:end].decode("utf‑8", errors="ignore").strip()
+            tooltip = raw[start:end].decode("utf-8", errors="ignore").strip()
     except Exception:
         pass
     if tooltip:
         return " ".join(tooltip.split())  # normalise whitespace
 
-    # -- 2) Neighbouring printed text -----------------------------------
-    words = page.get_text("words")  # (x0, y0, x1, y1, "text", block, line, word)
-    left_words = []
-    x0_box = w.rect.x0
-    y0_box, y1_box = w.rect.y0 - vert_pad, w.rect.y1 + vert_pad
+    # -- 2) Nearby static text ------------------------------------------
+    try:
+        r = fitz.Rect(w.rect)  # widget rect
+        # search a rectangle left of widget (max_dist points), same vertical span
+        search = fitz.Rect(r.x0 - max_dist, r.y0 - vert_pad, r.x0, r.y1 + vert_pad)
+        words = page.get_text("words")  # [x0,y0,x1,y1,"word",block,line,word]
+        candidates = []
+        for x0, y0, x1, y1, txt, *_ in words:
+            wx = (x0 + x1) / 2
+            wy = (y0 + y1) / 2
+            if search.contains(fitz.Point(wx, wy)):
+                candidates.append((x1, y0, txt))
+        if candidates:
+            # closest to widget (highest x1, i.e. nearest on the left)
+            candidates.sort(key=lambda t: t[0], reverse=True)
+            return candidates[0][2].strip()
+    except Exception:
+        pass
 
-    for (x0, y0, x1, y1, text, *_rest) in words:
-        if (x1 < x0_box - 5) and (x1 > x0_box - max_dist):          # left side
-            if (y1 > y0_box) and (y0 < y1_box):                      # vertical overlap
-                left_words.append((x0, text))
+    # -- 3) Fallback to field name --------------------------------------
+    try:
+        if getattr(w, "field_name", None):
+            return str(w.field_name).strip()
+    except Exception:
+        pass
 
-    if left_words:
-        # sort by x0 so sentence order is preserved
-        left_words.sort(key=lambda t: t[0])
-        label = " ".join(t[1] for t in left_words).strip(" :")
-        if label:
-            return " ".join(label.split())
-
-    # -- 3) Fallback -----------------------------------------------------
-    return w.field_name or ""
+    return ""
 
 
 # ----------------------------------------------------------------------
-def extract_form_fields(pdf_path: str, csv_path: str):
-    """Return a list of rows with field geometry & verbose label; also writes CSV."""
+def extract_form_fields(pdf_path: str, csv_out: str):
     doc = fitz.open(pdf_path)
+    rows = []
+    row_id = 0
 
-    rows, row_idx = [], 1
-    for page_no in range(len(doc)):
-        page = doc[page_no]
-        widgets = page.widgets() or []
+    for pno in range(doc.page_count):
+        page = doc[pno]
+        widgets = page.widgets()
+        if not widgets:
+            continue
+
         for w in widgets:
-            if w.rect is None:
-                continue
+            row_id += 1
+            label = get_widget_label(doc, page, w) or "UNLABELED"
+            field_name = getattr(w, "field_name", "") or ""
+            field_type = getattr(w, "field_type", "") or ""
+            rect = fitz.Rect(w.rect)
 
-            x1, y1, x2, y2 = w.rect.x0, w.rect.y0, w.rect.x1, w.rect.y1
-            label = get_widget_label(doc, page, w)
+            # Basic columns: row, heading, subheading, form_entry_description, x1,y1,x2,y2,page
+            # You can adapt "heading/subheading/description" to your needs.
+            heading = label
+            subheading = ""
+            form_entry_description = f"{field_type} {field_name}".strip()
 
-            # crude hierarchy split as before
-            parts = [p.strip() for p in (w.field_name or "").split(".")]
-            heading    = parts[0] if len(parts) > 0 else ""
-            subheading = parts[1] if len(parts) > 1 else ""
+            rows.append([
+                row_id,
+                heading,
+                subheading,
+                form_entry_description,
+                rect.x0, rect.y0, rect.x1, rect.y1,
+                pno + 1
+            ])
 
-            rows.append(
-                [row_idx, heading, subheading, label, x1, y1, x2, y2, page_no + 1]
-            )
-            row_idx += 1
+    # Write CSV
+    with open(csv_out, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["row", "heading", "subheading", "form_entry_description", "x1", "y1", "x2", "y2", "page"])
+        w.writerows(rows)
 
-    if not rows:
-        raise RuntimeError(f"No interactive form fields found in “{os.path.basename(pdf_path)}”.")
-
-    # CSV ----------------------------------------------------------------
-    header = [
-        "row",
-        "heading",
-        "subheading",
-        "form_entry_description",
-        "x1",
-        "y1",
-        "x2",
-        "y2",
-        "page",
-    ]
-    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
-        csv.writer(fh).writerows([header] + rows)
-
+    doc.close()
     return rows
 
 
 # ----------------------------------------------------------------------
-def annotate_pdf(pdf_path: str, rows, out_path: str):
-    doc = fitz.open(pdf_path)
+def annotate_pdf(pdf_path: str, rows, out_path: str, render_scale: float = 2.0):
+    """Create an *annotated helper PDF* that cannot be obscured by widgets.
+
+    Many PDFs (checkbox/radio widgets) are drawn as annotations that can appear
+    above regular page content, which can hide your red row numbers.
+    To make landmarks reliably visible, we:
+      1) rasterize (flatten) each page to an image
+      2) create a new PDF page with that image as the background
+      3) draw the row-number landmarks on top
+
+    This output is intended for mapping/visualization only; keep the original PDF
+    for actual form-filling.
+    """
+    src = fitz.open(pdf_path)
+    out = fitz.open()
+
+    # Group landmarks per page (0-indexed)
+    by_page = defaultdict(list)
     for row, *_rest, x1, y1, x2, y2, page_no in rows:
-        page = doc[page_no - 1]
-        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
-        page.insert_text(
-            (cx, cy),
-            str(row),
-            fontname="helv",
-            fontsize=9,
-            color=(1, 0, 0),  # red
-            overlay=True,
-        )
-    doc.save(out_path)
+        by_page[int(page_no) - 1].append((int(row), float(x1), float(y1), float(x2), float(y2)))
+
+    for i in range(src.page_count):
+        sp = src[i]
+        rect = sp.rect
+
+        # 1) Flatten page by rendering it
+        pix = sp.get_pixmap(matrix=fitz.Matrix(render_scale, render_scale), alpha=False)
+
+        # 2) New page with identical dimensions; paint the rendered image onto it
+        np = out.new_page(width=rect.width, height=rect.height)
+        np.insert_image(rect, stream=pix.tobytes("png"))
+
+        # 3) Draw landmarks (guaranteed on top now)
+        for (row_id, x1, y1, x2, y2) in by_page.get(i, []):
+            cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+            label = str(row_id)
+
+            # Small badge centered exactly at the widget center (no re-positioning)
+            w = 8 + 6 * len(label)   # width scales with digits
+            h = 12
+            badge = fitz.Rect(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+
+            np.draw_rect(badge, color=(1, 0, 0), fill=(1, 1, 1), width=0.8, overlay=True)
+            np.insert_textbox(
+                badge,
+                label,
+                fontname="helv",
+                fontsize=9,
+                color=(1, 0, 0),
+                align=1,   # centered
+                overlay=True,
+            )
+
+    out.save(out_path)
+    src.close()
+    out.close()
 
 
 # ----------------------------------------------------------------------
