@@ -52,42 +52,6 @@ def load_profile(token: str) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def sanitize_filename(name: str | None) -> str:
-    candidate = Path(name or "uploaded.pdf").name
-    return candidate or "uploaded.pdf"
-
-
-def resolve_library_pdf(pdf_id: str) -> tuple[Path | None, str | None]:
-    """
-    Returns (pdf_path, display_name) for a library entry.
-    Supports both the new directory-based format (id/meta.json + PDF)
-    and the legacy flat-file format (<id>.pdf).
-    """
-    pdf_dir = LIBRARY_DIR / pdf_id
-    if pdf_dir.is_dir():
-        meta_path = pdf_dir / "meta.json"
-        display_name = None
-        stored_name = None
-        if meta_path.exists():
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            display_name = meta.get("display_name") or meta.get("original_name")
-            stored_name = meta.get("stored_name")
-
-        pdf_path = pdf_dir / stored_name if stored_name else None
-        if not pdf_path or not pdf_path.exists():
-            pdf_candidates = sorted(pdf_dir.glob("*.pdf"))
-            pdf_path = pdf_candidates[0] if pdf_candidates else None
-            if pdf_path and not display_name:
-                display_name = pdf_path.name
-
-        return pdf_path, display_name
-
-    legacy = LIBRARY_DIR / f"{pdf_id}.pdf"
-    if legacy.exists():
-        return legacy, legacy.name
-
-    return None, None
-
 
 def write_status(job_dir: Path, obj: dict):
     (job_dir / "status.json").write_text(json.dumps(obj, indent=2), encoding="utf-8")
@@ -127,39 +91,16 @@ def api_profile(token: str):
 def api_library(token: str):
     load_profile(token)
     out = []
-    for entry in sorted(LIBRARY_DIR.iterdir()):
-        if entry.is_dir():
-            pdf_path, display_name = resolve_library_pdf(entry.name)
-            if not pdf_path:
-                continue
-            out.append({"id": entry.name, "display_name": display_name or pdf_path.name})
-        elif entry.suffix == ".pdf":
-            out.append({"id": entry.stem, "display_name": entry.name})
+    for p in sorted(LIBRARY_DIR.glob("*.pdf")):
+        out.append({"id": p.stem, "name": p.name})
     return out
 
 @app.get("/api/library/{token}/pdf/{pdf_id}")
 def api_library_pdf(token: str, pdf_id: str):
     load_profile(token)
-    p, _ = resolve_library_pdf(pdf_id)
-    if not p: raise HTTPException(404, "PDF not found")
+    p = LIBRARY_DIR / f"{pdf_id}.pdf"
+    if not p.exists(): raise HTTPException(404, "PDF not found")
     return FileResponse(str(p), media_type="application/pdf", filename=p.name)
-
-@app.delete("/api/pdfs/{token}/{pdf_id}")
-def api_library_delete(token: str, pdf_id: str):
-    load_profile(token)
-    # Remove saved PDF (directory or legacy file)
-    pdf_dir = LIBRARY_DIR / pdf_id
-    if pdf_dir.is_dir():
-        shutil.rmtree(pdf_dir, ignore_errors=True)
-    else:
-        legacy_pdf = LIBRARY_DIR / f"{pdf_id}.pdf"
-        if legacy_pdf.exists():
-            legacy_pdf.unlink()
-    # Optionally remove mappings
-    map_dir = MAPPINGS_DIR / pdf_id
-    if map_dir.exists():
-        shutil.rmtree(map_dir, ignore_errors=True)
-    return {"ok": True}
 
 @app.get("/api/completed/{token}")
 def api_completed_list(token: str):
@@ -206,32 +147,16 @@ async def create_job(
     if pdf is not None:
         b = await pdf.read()
         input_pdf_path.write_bytes(b)
-        input_name = sanitize_filename(pdf.filename)
+        input_name = pdf.filename or "uploaded.pdf"
         resolved_pdf_id = sha1_bytes(b)[:16]   # stable-ish id
-        # Save to library with original filename + metadata
-        pdf_dir = LIBRARY_DIR / resolved_pdf_id
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-        library_pdf_path = pdf_dir / input_name
-        library_pdf_path.write_bytes(b)
-        meta_path = pdf_dir / "meta.json"
-        meta_path.write_text(
-            json.dumps(
-                {
-                    "id": resolved_pdf_id,
-                    "display_name": input_name,
-                    "stored_name": library_pdf_path.name,
-                    "original_name": pdf.filename or input_name,
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+        # optionally save to library
+        (LIBRARY_DIR / f"{resolved_pdf_id}.pdf").write_bytes(b)
     else:
-        p, display_name = resolve_library_pdf(pdf_id)
-        if not p:
+        p = LIBRARY_DIR / f"{pdf_id}.pdf"
+        if not p.exists():
             raise HTTPException(404, "Unknown pdf_id")
         shutil.copyfile(p, input_pdf_path)
-        input_name = display_name or p.name
+        input_name = p.name
         resolved_pdf_id = pdf_id
 
     # merged instruction with profile defaults
@@ -256,7 +181,7 @@ async def create_job(
 
             input_stem = input_pdf_path.stem
             script_map_csv = input_pdf_path.with_name(f"{input_stem}_map.csv")
-            script_annotated = input_pdf_path.with_name(f"{input_stem}_annotated.pdf")
+            script_annotated = input_pdf_path.with_name(f"{input_stem}_final.pdf")
 
             annotated = map_dir / "annotated.pdf"
             map_csv   = map_dir / "map.csv"
@@ -291,22 +216,11 @@ async def create_job(
                 #    capture_output=True, text=True
                 #)
                 r2 = subprocess.run(
-                    [sys.executable, str(LABEL), str(annotated), str(map_csv)],
-                    capture_output=True,
-                    text=True,
+                [sys.executable, str(LABEL), "--annotated", str(annotated), "--map", str(map_csv), "--out", str(rich_csv)],
+                capture_output=True, text=True
                 )
                 if r2.returncode != 0:
                     raise RuntimeError(f"label_from_vision failed:\n{r2.stderr}\n{r2.stdout}")
-
-                # label_from_vision writes <csv_stem>_rich.csv next to the input CSV
-                produced_rich = map_csv.with_name(map_csv.stem + "_rich.csv")
-                if not produced_rich.exists():
-                    raise RuntimeError(f"label_from_vision did not produce expected file: {produced_rich}")
-                # Normalize to our standard filename
-                if produced_rich != rich_csv:
-                    shutil.copyfile(produced_rich, rich_csv)
-                else:
-                    rich_csv = produced_rich
 
                 # We cannot run form_mapper_gui in the cloud.
                 set_status(
@@ -343,16 +257,10 @@ async def create_job(
             # Adjust args to your overlay_fill.py
 
             r4 = subprocess.run(
-                [
-                    sys.executable,
-                    str(OVERLAY),
-                    "--pdf-in",
-                    str(input_pdf_path),
-                    "--json-map",
-                    str(fill_json),
-                    "--pdf-out",
-                    str(filled_pdf),
-                ],
+                [sys.executable, str(OVERLAY),
+                 "--pdf", str(input_pdf_path),
+                 "--json", str(fill_json),
+                 "--out", str(filled_pdf)],
                 capture_output=True, text=True
             )
             if r4.returncode != 0:
