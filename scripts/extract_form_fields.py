@@ -1,166 +1,153 @@
 #!/usr/bin/env python
 """
-extract_form.py  –  v2  (verbose labels)
+extract_form_fields.py  –  v5  (Sandwich Method + Manual Centering)
 Usage:  python extract_form.py path/to/form.pdf
 """
 
-import sys, os, csv, fitz  # PyMuPDF ≥ 1.23.21
-from collections import defaultdict
+import sys, os, csv, fitz  # PyMuPDF
 
 # ----------------------------------------------------------------------
 def get_widget_label(doc, page, w, max_dist=200, vert_pad=2):
     """
-    Return the most human-readable label for `w`:
-      1) /TU (tooltip / alternate text) if present
-      2) Static text immediately left of the widget
-      3) widget.field_name  (/T) as a last resort
+    Return the most human‑readable label for `w`.
     """
-    # -- 1) Tooltip ------------------------------------------------------
+    # -- 1) Tooltip
     tooltip = ""
     try:
-        raw = doc.xref_object(w.xref, compressed=False)  # bytes
-        # rudimentary parse; TU string is delimited by (...)
+        raw = doc.xref_object(w.xref, compressed=False)
         if b"/TU" in raw:
             start = raw.find(b"/TU") + 3
-            # find first '(' after /TU
             start = raw.find(b"(", start) + 1
             end   = raw.find(b")", start)
-            tooltip = raw[start:end].decode("utf-8", errors="ignore").strip()
+            tooltip = raw[start:end].decode("utf‑8", errors="ignore").strip()
     except Exception:
         pass
     if tooltip:
-        return " ".join(tooltip.split())  # normalise whitespace
+        return " ".join(tooltip.split())
 
-    # -- 2) Nearby static text ------------------------------------------
-    try:
-        r = fitz.Rect(w.rect)  # widget rect
-        # search a rectangle left of widget (max_dist points), same vertical span
-        search = fitz.Rect(r.x0 - max_dist, r.y0 - vert_pad, r.x0, r.y1 + vert_pad)
-        words = page.get_text("words")  # [x0,y0,x1,y1,"word",block,line,word]
-        candidates = []
-        for x0, y0, x1, y1, txt, *_ in words:
-            wx = (x0 + x1) / 2
-            wy = (y0 + y1) / 2
-            if search.contains(fitz.Point(wx, wy)):
-                candidates.append((x1, y0, txt))
-        if candidates:
-            # closest to widget (highest x1, i.e. nearest on the left)
-            candidates.sort(key=lambda t: t[0], reverse=True)
-            return candidates[0][2].strip()
-    except Exception:
-        pass
+    # -- 2) Neighbouring printed text
+    words = page.get_text("words")
+    left_words = []
+    x0_box = w.rect.x0
+    y0_box, y1_box = w.rect.y0 - vert_pad, w.rect.y1 + vert_pad
 
-    # -- 3) Fallback to field name --------------------------------------
-    try:
-        if getattr(w, "field_name", None):
-            return str(w.field_name).strip()
-    except Exception:
-        pass
+    for (x0, y0, x1, y1, text, *_rest) in words:
+        if (x1 < x0_box - 5) and (x1 > x0_box - max_dist):
+            if (y1 > y0_box) and (y0 < y1_box):
+                left_words.append((x0, text))
 
-    return ""
+    if left_words:
+        left_words.sort(key=lambda t: t[0])
+        label = " ".join(t[1] for t in left_words).strip(" :")
+        if label:
+            return " ".join(label.split())
+
+    # -- 3) Fallback
+    return w.field_name or ""
 
 
 # ----------------------------------------------------------------------
-def extract_form_fields(pdf_path: str, csv_out: str):
+def extract_form_fields(pdf_path: str, csv_path: str):
+    """Return a list of rows with field geometry & verbose label; also writes CSV."""
     doc = fitz.open(pdf_path)
-    rows = []
-    row_id = 0
 
-    for pno in range(doc.page_count):
-        page = doc[pno]
-        widgets = page.widgets()
-        if not widgets:
-            continue
-
+    rows, row_idx = [], 1
+    for page_no in range(len(doc)):
+        page = doc[page_no]
+        widgets = page.widgets() or []
         for w in widgets:
-            row_id += 1
-            label = get_widget_label(doc, page, w) or "UNLABELED"
-            field_name = getattr(w, "field_name", "") or ""
-            field_type = getattr(w, "field_type", "") or ""
-            rect = fitz.Rect(w.rect)
+            if w.rect is None:
+                continue
 
-            # Basic columns: row, heading, subheading, form_entry_description, x1,y1,x2,y2,page
-            # You can adapt "heading/subheading/description" to your needs.
-            heading = label
-            subheading = ""
-            form_entry_description = f"{field_type} {field_name}".strip()
+            x1, y1, x2, y2 = w.rect.x0, w.rect.y0, w.rect.x1, w.rect.y1
+            label = get_widget_label(doc, page, w)
 
-            rows.append([
-                row_id,
-                heading,
-                subheading,
-                form_entry_description,
-                rect.x0, rect.y0, rect.x1, rect.y1,
-                pno + 1
-            ])
+            parts = [p.strip() for p in (w.field_name or "").split(".")]
+            heading    = parts[0] if len(parts) > 0 else ""
+            subheading = parts[1] if len(parts) > 1 else ""
 
-    # Write CSV
-    with open(csv_out, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["row", "heading", "subheading", "form_entry_description", "x1", "y1", "x2", "y2", "page"])
-        w.writerows(rows)
+            rows.append(
+                [row_idx, heading, subheading, label, x1, y1, x2, y2, page_no + 1]
+            )
+            row_idx += 1
 
-    doc.close()
+    if not rows:
+        raise RuntimeError(f"No interactive form fields found in “{os.path.basename(pdf_path)}”.")
+
+    # CSV
+    header = ["row", "heading", "subheading", "form_entry_description", "x1", "y1", "x2", "y2", "page"]
+    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
+        csv.writer(fh).writerows([header] + rows)
+
     return rows
 
 
 # ----------------------------------------------------------------------
-def annotate_pdf(pdf_path: str, rows, out_path: str, render_scale: float = 2.0):
-    """Create an *annotated helper PDF* that cannot be obscured by widgets.
-
-    Many PDFs (checkbox/radio widgets) are drawn as annotations that can appear
-    above regular page content, which can hide your red row numbers.
-    To make landmarks reliably visible, we:
-      1) rasterize (flatten) each page to an image
-      2) create a new PDF page with that image as the background
-      3) draw the row-number landmarks on top
-
-    This output is intended for mapping/visualization only; keep the original PDF
-    for actual form-filling.
+def create_overlay_pdf(original_pdf_path: str, rows, output_pdf_path: str):
     """
-    src = fitz.open(pdf_path)
-    out = fitz.open()
+    Creates a NEW PDF where each page is an image of the original, 
+    with red numbers drawn explicitly ON TOP of that image.
+    """
+    src_doc = fitz.open(original_pdf_path)
+    out_doc = fitz.open()
 
-    # Group landmarks per page (0-indexed)
-    by_page = defaultdict(list)
-    for row, *_rest, x1, y1, x2, y2, page_no in rows:
-        by_page[int(page_no) - 1].append((int(row), float(x1), float(y1), float(x2), float(y2)))
+    # Group rows by page for easier processing
+    rows_by_page = {}
+    for r in rows:
+        p_num = r[8]  # "page" is at index 8
+        if p_num not in rows_by_page:
+            rows_by_page[p_num] = []
+        rows_by_page[p_num].append(r)
 
-    for i in range(src.page_count):
-        sp = src[i]
-        rect = sp.rect
+    print(f"Processing {len(src_doc)} pages...")
 
-        # 1) Flatten page by rendering it
-        pix = sp.get_pixmap(matrix=fitz.Matrix(render_scale, render_scale), alpha=False)
-
-        # 2) New page with identical dimensions; paint the rendered image onto it
-        np = out.new_page(width=rect.width, height=rect.height)
-        np.insert_image(rect, stream=pix.tobytes("png"))
-
-        # 3) Draw landmarks (guaranteed on top now)
-        for (row_id, x1, y1, x2, y2) in by_page.get(i, []):
-            cx, cy = (x1 + x2) / 2.0, (y1 + y2) / 2.0
-            label = str(row_id)
-
-            # Small badge centered exactly at the widget center (no re-positioning)
-            w = 8 + 6 * len(label)   # width scales with digits
-            h = 12
-            badge = fitz.Rect(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-
-            np.draw_rect(badge, color=(1, 0, 0), fill=(1, 1, 1), width=0.8, overlay=True)
-            np.insert_textbox(
-                badge,
-                label,
-                fontname="helv",
-                fontsize=9,
-                color=(1, 0, 0),
-                align=1,   # centered
-                overlay=True,
+    for i in range(len(src_doc)):
+        page_num = i + 1
+        src_page = src_doc[i]
+        
+        # 1. Render the original page (buttons becoming pixels)
+        #    annots=True ensures buttons are visible in the image
+        pix = src_page.get_pixmap(dpi=150, annots=True)
+        
+        # 2. Create a fresh page in the new document
+        new_page = out_doc.new_page(width=src_page.rect.width, height=src_page.rect.height)
+        
+        # 3. Paint the image of the original page as the background
+        new_page.insert_image(src_page.rect, pixmap=pix)
+        
+        # 4. Draw Red Numbers ON TOP of the background image
+        page_rows = rows_by_page.get(page_num, [])
+        for row_data in page_rows:
+            # row format: [row_idx, heading, sub, label, x1, y1, x2, y2, page]
+            idx = row_data[0]
+            x1, y1, x2, y2 = row_data[4], row_data[5], row_data[6], row_data[7]
+            
+            # Button Center
+            cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+            
+            # --- Manual Centering (Compatible with all PyMuPDF versions) ---
+            text = str(idx)
+            font_size = 10
+            font_name = "helv"
+            
+            # Calculate width of the text in points
+            text_width = fitz.get_text_length(text, fontname=font_name, fontsize=font_size)
+            
+            # Shift x back by half width to center horizontally
+            # Shift y down slightly to align baseline (approx 30% of font size)
+            draw_x = cx - (text_width / 2)
+            draw_y = cy + (font_size * 0.3)
+            
+            new_page.insert_text(
+                (draw_x, draw_y),
+                text,
+                fontname=font_name,
+                fontsize=font_size,
+                color=(1, 0, 0)
+                # Removed 'align' to fix TypeError
             )
 
-    out.save(out_path)
-    src.close()
-    out.close()
+    out_doc.save(output_pdf_path)
 
 
 # ----------------------------------------------------------------------
@@ -170,11 +157,14 @@ if __name__ == "__main__":
 
     in_pdf  = sys.argv[1]
     stem, _ = os.path.splitext(in_pdf)
+    
     csv_out = f"{stem}_map.csv"
-    pdf_out = f"{stem}_annotated.pdf"
+    pdf_out = f"{stem}_final.pdf"
 
+    # 1. Extract Data
     rows = extract_form_fields(in_pdf, csv_out)
-    annotate_pdf(in_pdf, rows, pdf_out)
+    print(f"✓ Extracted coordinates to      → {csv_out}")
 
-    print(f"✓ Wrote CSV with {len(rows)} rows → {csv_out}")
-    print(f"✓ Annotated PDF saved as          → {pdf_out}")
+    # 2. Create Final "Sandwich" PDF
+    create_overlay_pdf(in_pdf, rows, pdf_out)
+    print(f"✓ Created guaranteed overlay at → {pdf_out}")
