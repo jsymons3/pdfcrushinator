@@ -211,13 +211,10 @@ async def create_job(
                     raise RuntimeError(f"Expected mapping output missing: {e.filename}") from e
 
                 set_status(job_dir, "running", 38, "Labeling fields with vision…")
-                #r2 = subprocess.run(
-                #    ["python", str(LABEL), "--annotated", str(annotated), "--map", str(map_csv), "--out", str(rich_csv)],
-                #    capture_output=True, text=True
-                #)
                 r2 = subprocess.run(
-                [sys.executable, str(LABEL), "--annotated", str(annotated), "--map", str(map_csv), "--out", str(rich_csv)],
-                capture_output=True, text=True
+                    [sys.executable, str(LABEL), str(annotated), str(map_csv)],
+                    capture_output=True,
+                    text=True,
                 )
                 if r2.returncode != 0:
                     raise RuntimeError(f"label_from_vision failed:\n{r2.stderr}\n{r2.stdout}")
