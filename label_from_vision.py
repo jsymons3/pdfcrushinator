@@ -3,243 +3,195 @@
 label_from_vision.py
 ------------------------------------
 Usage:
-    python label_from_vision.py marked_form.pdf widget_rows.csv
+    python label_from_vision.py path/to/filename_final.pdf path/to/filename_map.csv
 
 Output:
-    widget_rows_rich.csv   (same as input CSV + rich_description column)
+    path/to/filename_map_rich.csv
 """
 
 from pathlib import Path
-import os, sys, json, base64
-import fitz
+import os, sys, json
+import fitz  # PyMuPDF
 import pandas as pd
 from dotenv import load_dotenv
+
+# Load environment variables (Ensure GEMINI_API_KEY is in .env)
 load_dotenv()
 
-from openai import OpenAI
-client = OpenAI()
-
-from PIL import Image  # still imported if you want to use it later
+# --- Google Gen AI Imports ---
+# pip install google-genai
+from google import genai
+from google.genai import types
 
 # ------------------- CONFIG -------------------------------------------
-MODEL       = "gpt-5.1"
-DPI         = 300       # rasterise resolution
-BATCH_SIZE  = 50        # <= HOW MANY FIELDS PER API CALL
+# Using the specific Gemini 3 Pro Preview model code you provided.
+MODEL_ID    = "gemini-3-pro-preview" 
+DPI         = 200       # Balance clarity and memory use for vision inference
+BATCH_SIZE  = 100        # Smaller batch size to allow deep reasoning per item
 # ----------------------------------------------------------------------
 
-
-def pdf_to_png_data_urls(pdf_path: str, dpi=DPI):
-    """Convert each PDF page to a base-64 PNG data-URL."""
+def pdf_pages_to_image_parts(pdf_path: Path, pages: list[int], dpi=DPI):
+    """
+    Convert selected PDF pages to PNG bytes.
+    We render only the pages needed for the current batch to reduce memory.
+    """
     doc = fitz.open(pdf_path)
-    urls = []
-
-    for page in doc:
+    parts = []
+    
+    page_numbers = sorted({p for p in pages if 1 <= p <= len(doc)})
+    print(f"   Converting {len(page_numbers)} pages to images ({dpi} DPI) for Gemini 3 Vision...")
+    for page_number in page_numbers:
+        page = doc[page_number - 1]
         pix = page.get_pixmap(dpi=dpi, alpha=False)
         png_bytes = pix.tobytes("png")
-        b64 = base64.b64encode(png_bytes).decode("ascii")
-        urls.append(f"data:image/png;base64,{b64}")
+        parts.append(types.Part.from_bytes(data=png_bytes, mime_type="image/png"))
+        
+    doc.close()
+    return parts
 
-    return urls
-
-
-def build_history_text(history_examples):
+def build_prompt_text(batch_rows, history_examples):
     """
-    Optional: previous (id -> description) examples so the model
-    can keep style/ontology consistent across batches.
-    history_examples is a list of dicts {row_id, description}.
+    Constructs a prompt designed for Gemini 3's reasoning capabilities.
     """
-    if not history_examples:
-        return ""
+    
+    # 1. History Context (for consistency)
+    history_text = ""
+    if history_examples:
+        recent = history_examples[-10:] 
+        lines = ["--- REFERENCE STYLE (Previous Examples) ---"]
+        for ex in recent:
+            lines.append(f"ID {ex['row_id']} -> {ex['description']}")
+        history_text = "\n".join(lines) + "\n\n"
 
-    recent = history_examples[-40:]  # or whatever cap you like
-    lines = [
-        "Here are some previously processed IDs and their final descriptions.",
-        "Use these as examples of the desired style and level of detail:"
-    ]
-    for ex in recent:
-        lines.append(f"- ID {ex['row_id']}: {ex['description']}")
-    return "\n".join(lines)
-
-
-def call_openai_vision(image_urls, batch_rows, history_examples=None):
-    """
-    Ask the model to map a *batch* of rows to concise descriptions,
-    using heading / subheading / form_entry_description as hints.
-
-    image_urls: list of data-URL PNGs for all pages
-    batch_rows: list of dicts from df.to_dict('records') for this batch
-    history_examples: list of {row_id, description} from previous batches
-    """
-    allowed_keys = [str(r["row"]) for r in batch_rows]
-    history_text = build_history_text(history_examples or [])
-
-    # Describe CSV metadata for this batch
-    meta_lines = ["For this batch, here are the IDs and their CSV metadata:"]
+    # 2. Batch Metadata
+    meta_lines = ["--- IDs TO ANALYZE IN THIS BATCH ---"]
     for r in batch_rows:
         rid = str(r["row"])
+        # Hints from the CSV (spatial extraction)
         heading = str(r.get("heading", "") or "").strip()
         subheading = str(r.get("subheading", "") or "").strip()
         prelim = str(r.get("form_entry_description", "") or "").strip()
-        page = r.get("page", "")
-
+        page = str(r.get("page", ""))
+        
         meta_lines.append(
-            f"- ID {rid} (page {page}): "
-            f"heading={heading!r}, subheading={subheading!r}, "
-            f"preliminary_description={prelim!r}"
+            f"ID: {rid} (Page {page}) | Hint: {heading} > {subheading} > {prelim}"
         )
-    batch_meta_text = "\n".join(meta_lines)
 
-    system_prompt = (
-        "You are a highly reliable forms analyst. "
-        "You see one or more pages of a PDF form with red numbers stamped in the centre "
-        "of each entry box. These red numbers may appear in any order on the page; "
-        "they do NOT necessarily increase left-to-right or top-to-bottom. "
-        "Never assume numeric order corresponds to reading order.\n\n"
-        "For each specific ID in this batch, you must:\n"
-        "1. Look at the region of the form where that red number appears.\n"
-        "2. Understand the actual field label or purpose near that red number.\n"
-        "3. Combine that with the preliminary CSV description (if provided) to produce "
-        "   a final, concise, human-readable field description.\n\n"
-        "Rules:\n"
-        "- Only produce entries for the IDs explicitly listed in this batch.\n"
-        "- Do NOT invent additional IDs.\n"
-        "- If the preliminary CSV description already looks correct and specific, reuse it "
-        "  or lightly polish it; do NOT radically change it unless it is clearly wrong.\n"
-        "- If an ID truly has no meaningful caption, you may leave its description empty.\n"
-        "- Keep descriptions short but clear (a short phrase is usually enough).\n\n"
-        "Output format is VERY strict:\n"
-        "- One line per ID.\n"
-        "- No header or commentary.\n"
-        "- Each line must be: <ID>: <description>\n"
-        "- Use each ID exactly once.\n"
-        "- Do NOT use any additional ':' characters in the description; use commas or dashes instead.\n"
+    batch_text = "\n".join(meta_lines)
+    
+    # 3. Reasoning Instructions
+    instructions = (
+        "\n\n--- MISSION --- \n"
+        "You are an expert Form Reasoning Agent. You are looking at a document where specific input fields "
+        "have been stamped with Red ID Numbers.\n\n"
+        "For each ID listed above, perform this reasoning:\n"
+        "1. VISUAL LOCATE: Find the Red ID Number on the page images.\n"
+        "2. CONTEXTUALIZE: Look at the text surrounding that box. Is the label above? To the left? "
+        "   Is it part of a grid or matrix? (e.g., 'Row: Heating, Column: Yes').\n"
+        "3. SYNTHESIZE: Combine the visual label with the 'Hint' provided. If the Hint implies a hierarchy "
+        "   (like 'Section 2 > Buyer Info'), include that nuance.\n"
+        "4. OUTPUT: Generate a `rich_description` that clearly explains what data goes in that field.\n\n"
+        "--- OUTPUT FORMAT ---\n"
+        "Return a JSON object where keys are the IDs and values are the rich descriptions."
     )
 
-    user_text = (
-        "You will see:\n"
-        "1) Some previous examples of IDs and descriptions (for style consistency), if any.\n"
-        "2) The CSV metadata (heading, subheading, preliminary description) for this batch.\n"
-        "3) The form images.\n\n"
-        "Important:\n"
-        "- Red numbers may be out of order or scattered around the page.\n"
-        "- Do not infer ordering from position; treat each ID independently.\n"
-        "- Use the preliminary CSV description as a baseline; correct or refine it only "
-        "when the image clearly shows it is wrong or incomplete.\n\n"
-        f"{history_text}\n\n"
-        f"{batch_meta_text}\n\n"
-        "Use exactly these IDs, no extras and no omissions:\n"
-        f"{json.dumps(allowed_keys)}\n\n"
-        "Return your answer as plain text, with one line for each ID, in the same order as the list above.\n"
-        "Each line MUST be of the form:\n"
-        "<ID>: <description>\n"
-        "Do NOT add any explanation before or after the list. Just the lines."
+    return history_text + batch_text + instructions
+
+def call_gemini_vision(client, pdf_path, batch_rows, history_examples):
+    """
+    Sends images + prompt to Gemini 3 Pro.
+    """
+    pages = [int(r.get("page") or 1) for r in batch_rows]
+    image_parts = pdf_pages_to_image_parts(pdf_path, pages)
+    text_prompt = build_prompt_text(batch_rows, history_examples)
+    contents = image_parts + [text_prompt]
+
+    # System instruction tailored for Gemini 3's "Agentic" persona
+    sys_instruction = (
+        "You are a state-of-the-art multimodal form understanding agent. "
+        "You possess deep reasoning capabilities to deduce the meaning of form fields "
+        "even when layouts are complex, tabular, or non-standard."
     )
 
-    messages = [
-        {
-            "role": "system",
-            "content": system_prompt,
-        },
-        {
-            "role": "user",
-            "content": (
-                [{"type": "text", "text": user_text}] +
-                [
-                    {"type": "image_url", "image_url": {"url": u, "detail": "low"}}
-                    for u in image_urls
-                ]
-            ),
-        },
-    ]
+    try:
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=sys_instruction,
+                response_mime_type="application/json", # Native JSON output
+                temperature=0.1, # Low temperature for factual precision
+            )
+        )
+        
+        # Parse JSON result
+        result_json = json.loads(response.text)
+        return result_json
 
-    completion = client.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        reasoning_effort="high",
-    )
-
-    raw = completion.choices[0].message.content or ""
-    lines = raw.splitlines()
-
-    result = {}
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        if ":" not in line:
-            continue
-        key_part, desc_part = line.split(":", 1)
-        key = key_part.strip()
-        desc = desc_part.strip()
-        if key in allowed_keys:
-            result[key] = desc
-
-    # Ensure every ID has at least an empty string
-    for k in allowed_keys:
-        result.setdefault(k, "")
-
-    return result
-
+    except Exception as e:
+        print(f"Error calling {MODEL_ID}: {e}")
+        return {}
 
 def chunk_list(lst, size):
-    """Yield successive chunks of list `lst` with max length `size`."""
     for i in range(0, len(lst), size):
         yield lst[i:i+size]
 
-
 def main():
     if len(sys.argv) != 3:
-        sys.exit("Usage: python label_from_vision.py annotated.pdf widget_rows.csv")
+        sys.exit("Usage: python label_from_vision.py <path_to_final_pdf> <path_to_map_csv>")
 
-    pdf_path, csv_path = Path(sys.argv[1]), Path(sys.argv[2])
+    pdf_path = Path(sys.argv[1])
+    csv_path = Path(sys.argv[2])
 
-    # --- Rasterise PDF --------------------------------------------------
-    print("Rasterising PDF…")
-    imgs = pdf_to_png_data_urls(pdf_path)
+    if not os.environ.get("GEMINI_API_KEY"):
+        sys.exit("Error: GEMINI_API_KEY not found in environment variables.")
 
-    # --- Load CSV + rows -----------------------------------------------
+    # Initialize Client
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    print(f"Initialized Google GenAI Client with model: {MODEL_ID}")
+
+    # 1. Load CSV (Data Context)
+    print(f"Loading CSV data from {csv_path}...")
     df = pd.read_csv(csv_path)
-    if "row" not in df.columns:
-        sys.exit("CSV must contain a 'row' column with the numeric IDs.")
+    
+    # Ensure columns exist
+    for col in ["row", "heading", "subheading", "form_entry_description", "page"]:
+        if col not in df.columns: df[col] = ""
 
-    # Turn each row into a dict so we can pass heading / subheading / form_entry_description
     records = df.to_dict(orient="records")
+    print(f"Found {len(records)} fields. Processing in batches of {BATCH_SIZE}...")
 
-    print(f"Found {len(records)} fields. Processing in batches of {BATCH_SIZE}…")
-
-    # Global map (row_id -> description) + running history for context
+    # 3. Process Batches
     descr_map = {}
-    history_examples = []  # list of {"row_id": ..., "description": ...}
+    history_examples = [] 
 
-    batch_index = 0
-    for batch_rows in chunk_list(records, BATCH_SIZE):
-        batch_index += 1
+    for i, batch_rows in enumerate(chunk_list(records, BATCH_SIZE)):
         batch_ids = [str(r["row"]) for r in batch_rows]
-        print(
-            f"Calling OpenAI Vision for batch {batch_index}: "
-            f"IDs {batch_ids[0]} … {batch_ids[-1]} "
-            f"({len(batch_ids)} fields)"
-        )
+        print(f"Batch {i+1}: Reasoning on IDs {batch_ids[0]} to {batch_ids[-1]}...")
 
-        # Call model with full row dicts + history
-        batch_map = call_openai_vision(imgs, batch_rows, history_examples)
-
-        # Merge into global map + update history
+        batch_results = call_gemini_vision(client, pdf_path, batch_rows, history_examples)
+        
         for r in batch_rows:
             rid = str(r["row"])
-            desc = batch_map.get(rid, "")
-            descr_map[rid] = desc
-            history_examples.append({"row_id": rid, "description": desc})
+            new_desc = batch_results.get(rid)
+            
+            if not new_desc:
+                # Fallback if the model skipped an ID
+                existing = str(r.get("form_entry_description", "") or "").strip()
+                new_desc = existing if existing else "[Description Unavailable]"
+            
+            descr_map[rid] = new_desc
+            history_examples.append({"row_id": rid, "description": new_desc})
 
-    # --- Append descriptions -------------------------------------------
+    # 4. Save Results
     df["rich_description"] = df["row"].astype(str).map(descr_map).fillna("")
-
-    out_path = csv_path.with_name(csv_path.stem + "_rich.csv")
+    out_path = csv_path.parent / (csv_path.stem + "_rich.csv")
     df.to_csv(out_path, index=False)
-
-    print(f"✓ Wrote enriched CSV → {out_path}")
-
-
+    
+    print("-" * 60)
+    print(f"✓ Success! Gemini 3 Pro analysis saved to:")
+    print(f"  {out_path}")
+    print("-" * 60)
 
 if __name__ == "__main__":
     main()
