@@ -92,7 +92,15 @@ def api_library(token: str):
     load_profile(token)
     out = []
     for p in sorted(LIBRARY_DIR.glob("*.pdf")):
-        out.append({"id": p.stem, "name": p.name})
+        meta_path = p.with_suffix(".json")
+        name = p.name
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                name = meta.get("name", name)
+            except json.JSONDecodeError:
+                pass
+        out.append({"id": p.stem, "name": name})
     return out
 
 @app.get("/api/library/{token}/pdf/{pdf_id}")
@@ -100,7 +108,15 @@ def api_library_pdf(token: str, pdf_id: str):
     load_profile(token)
     p = LIBRARY_DIR / f"{pdf_id}.pdf"
     if not p.exists(): raise HTTPException(404, "PDF not found")
-    return FileResponse(str(p), media_type="application/pdf", filename=p.name)
+    meta_path = p.with_suffix(".json")
+    filename = p.name
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            filename = meta.get("name", filename)
+        except json.JSONDecodeError:
+            pass
+    return FileResponse(str(p), media_type="application/pdf", filename=filename)
 
 @app.get("/api/completed/{token}")
 def api_completed_list(token: str):
@@ -150,13 +166,25 @@ async def create_job(
         input_name = pdf.filename or "uploaded.pdf"
         resolved_pdf_id = sha1_bytes(b)[:16]   # stable-ish id
         # optionally save to library
-        (LIBRARY_DIR / f"{resolved_pdf_id}.pdf").write_bytes(b)
+        library_pdf_path = LIBRARY_DIR / f"{resolved_pdf_id}.pdf"
+        library_pdf_path.write_bytes(b)
+        (library_pdf_path.with_suffix(".json")).write_text(
+            json.dumps({"name": input_name}, indent=2),
+            encoding="utf-8",
+        )
     else:
         p = LIBRARY_DIR / f"{pdf_id}.pdf"
         if not p.exists():
             raise HTTPException(404, "Unknown pdf_id")
         shutil.copyfile(p, input_pdf_path)
         input_name = p.name
+        meta_path = p.with_suffix(".json")
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                input_name = meta.get("name", input_name)
+            except json.JSONDecodeError:
+                pass
         resolved_pdf_id = pdf_id
 
     # merged instruction with profile defaults
