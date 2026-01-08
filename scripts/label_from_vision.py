@@ -126,15 +126,7 @@ def call_gemini_vision(client, pdf_path, batch_rows, history_examples):
         
         # Parse JSON result
         result_json = json.loads(response.text)
-        if isinstance(result_json, dict):
-            return result_json
-        if isinstance(result_json, list):
-            merged = {}
-            for item in result_json:
-                if isinstance(item, dict):
-                    merged.update({str(k): v for k, v in item.items()})
-            return merged
-        return {}
+        return result_json
 
     except Exception as e:
         print(f"Error calling {MODEL_ID}: {e}")
