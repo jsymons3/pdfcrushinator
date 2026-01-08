@@ -8,7 +8,7 @@ import threading
 import hashlib
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
@@ -96,6 +96,15 @@ def ui(token: str):
     profile = load_profile(token)
     tpl = jinja.get_template("index.html")
     return tpl.render(token=token, profile_name=profile.get("agent_name", "(profile)"))
+
+
+@app.get("/t/{token}/map/{pdf_id}", response_class=HTMLResponse)
+def map_editor_ui(token: str, pdf_id: str):
+    load_profile(token)
+    if not (MAPPINGS_DIR / pdf_id).exists():
+        raise HTTPException(404, "Mapping not found")
+    tpl = jinja.get_template("mapper.html")
+    return tpl.render(token=token, pdf_id=pdf_id)
 
 
 @app.get("/api/profile/{token}")
@@ -293,6 +302,7 @@ async def create_job(
                     45,
                     "Mapped. Generating fill plan next...",
                     extra={
+                        "pdf_id": pdf_id_local,
                         "annotated_url": f"/api/mappings/{token}/{pdf_id_local}/annotated",
                         "rich_map_url": f"/api/mappings/{token}/{pdf_id_local}/rich",
                     },
@@ -430,3 +440,17 @@ def mapping_rich(token: str, pdf_id: str):
     if not p.exists():
         raise HTTPException(404, "Not found")
     return FileResponse(str(p), media_type="text/csv", filename="map_rich.csv")
+
+
+@app.post("/api/mappings/{token}/{pdf_id}/save")
+async def save_mapping(token: str, pdf_id: str, request: Request):
+    load_profile(token)
+    body = await request.body()
+    csv_text = body.decode("utf-8")
+
+    map_dir = MAPPINGS_DIR / pdf_id
+    if not map_dir.exists():
+        raise HTTPException(404, "Mapping not found")
+
+    (map_dir / "map_rich.csv").write_text(csv_text, encoding="utf-8")
+    return {"ok": True}

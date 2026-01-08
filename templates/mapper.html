@@ -1,0 +1,408 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Map Editor — Agent Assist</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+  <style>
+    :root {
+      --bg-primary: #fafafa;
+      --bg-panel: #ffffff;
+      --border: #e5e5e5;
+      --accent: #06b6d4;
+      --text: #1a1a1a;
+    }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      margin: 0;
+      background: var(--bg-primary);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .toolbar {
+      height: 60px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      flex-shrink: 0;
+    }
+    .title {
+      font-weight: 700;
+      font-size: 18px;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      font-size: 14px;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      margin-right: 10px;
+    }
+
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* PDF Viewer Side */
+    .pdf-container {
+      flex: 1;
+      background: #525659;
+      overflow: auto;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+    .pdf-page {
+      position: relative;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      margin-bottom: 20px;
+    }
+
+    /* Overlay Boxes */
+    .field-box {
+      position: absolute;
+      border: 2px solid rgba(236, 72, 153, 0.6);
+      background: rgba(236, 72, 153, 0.1);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .field-box:hover,
+    .field-box.active {
+      border-color: #ec4899;
+      background: rgba(236, 72, 153, 0.3);
+      z-index: 10;
+    }
+    .field-badge {
+      position: absolute;
+      top: -14px;
+      left: -2px;
+      background: #ec4899;
+      color: white;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-weight: bold;
+    }
+
+    /* Editor Sidebar */
+    .sidebar {
+      width: 400px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .fields-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+      list-style: none;
+      margin: 0;
+    }
+    .field-item {
+      padding: 15px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .field-item:hover { background: #f9fafb; }
+    .field-item.active {
+      background: #f0fdfa;
+      border-left: 4px solid var(--accent);
+    }
+
+    .field-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #666;
+    }
+    .field-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: bold;
+      background: #eee;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .input-group input,
+    .input-group textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+    }
+    .input-group textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .status-bar {
+      padding: 10px 20px;
+      font-size: 12px;
+      color: #666;
+      background: #f5f5f5;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="title">Mapping Editor</div>
+  <div>
+    <button class="btn btn-outline" onclick="window.close()">Close</button>
+    <button class="btn" onclick="saveMapping()">Save & Confirm</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- PDF Render Area -->
+  <div class="pdf-container" id="pdfContainer"></div>
+
+  <!-- Sidebar Form -->
+  <div class="sidebar">
+    <div style="padding: 15px; border-bottom: 1px solid var(--border); font-size: 13px; color: #666;">
+      Click a field on the PDF or select from the list to edit its description.
+    </div>
+    <ul class="fields-list" id="fieldsList"></ul>
+  </div>
+</div>
+
+<script>
+  const token = "{{ token }}";
+  const pdfId = "{{ pdf_id }}";
+  let pdfDoc = null;
+  let fieldsData = []; // Will hold CSV data
+  const scale = 1.2; // Zoom level
+
+  async function init() {
+    // 1. Load CSV Data
+    const csvRes = await fetch(`/api/mappings/${token}/${pdfId}/rich`);
+    const csvText = await csvRes.text();
+    fieldsData = parseCSV(csvText);
+    renderSidebar();
+
+    // 2. Load PDF
+    const loadingTask = pdfjsLib.getDocument(`/api/mappings/${token}/${pdfId}/annotated`);
+    pdfDoc = await loadingTask.promise;
+    renderPDF();
+  }
+
+  function parseCSV(text) {
+    const lines = text.split('\n').filter(l => l.trim());
+    const headers = lines[0].split(',').map(h => h.trim());
+    return lines.slice(1).map(line => {
+      // Simple CSV parser (doesn't handle quoted commas perfectly, but sufficient for this demo)
+      // A robust app should use a library like PapaParse
+      const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
+      const cleanValues = values.map(v => v ? v.replace(/^"|"$/g, '') : '');
+
+      // Map to object based on headers
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = cleanValues[i] || '');
+
+      // Convert numbers
+      obj.row = parseInt(obj.row, 10);
+      obj.page = parseInt(obj.page, 10);
+      obj.x1 = parseFloat(obj.x1);
+      obj.y1 = parseFloat(obj.y1);
+      obj.x2 = parseFloat(obj.x2);
+      obj.y2 = parseFloat(obj.y2);
+      return obj;
+    });
+  }
+
+  async function renderPDF() {
+    const container = document.getElementById('pdfContainer');
+    container.innerHTML = ''; // Clear
+
+    for (let num = 1; num <= pdfDoc.numPages; num++) {
+      const page = await pdfDoc.getPage(num);
+      const viewport = page.getViewport({ scale });
+
+      const div = document.createElement("div");
+      div.className = "pdf-page";
+      div.style.width = viewport.width + "px";
+      div.style.height = viewport.height + "px";
+
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      div.appendChild(canvas);
+
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+      // Render Overlay Boxes for this page
+      renderOverlays(div, num);
+
+      container.appendChild(div);
+    }
+  }
+
+  function renderOverlays(pageDiv, pageNum) {
+    const pageFields = fieldsData.filter(f => f.page === pageNum);
+
+    pageFields.forEach(f => {
+      // PDF coords are usually bottom-left origin, but PyMuPDF rects are usually top-left.
+      // Assuming coordinates from extract script match the PDF.js viewport.
+      // We often need to scale because PDF.js scale might differ from PyMuPDF's definition.
+
+      // Simple scaling if coords are top-down points:
+      const x = f.x1 * scale;
+      const y = f.y1 * scale;
+      const w = (f.x2 - f.x1) * scale;
+      const h = (f.y2 - f.y1) * scale;
+
+      const box = document.createElement("div");
+      box.className = "field-box";
+      box.style.left = x + "px";
+      box.style.top = y + "px";
+      box.style.width = w + "px";
+      box.style.height = h + "px";
+      box.id = `box-${f.row}`;
+
+      box.innerHTML = `<div class="field-badge">${f.row}</div>`;
+
+      box.onclick = (e) => {
+        e.stopPropagation();
+        selectField(f.row);
+      };
+
+      pageDiv.appendChild(box);
+    });
+  }
+
+  function renderSidebar() {
+    const list = document.getElementById("fieldsList");
+    list.innerHTML = '';
+
+    fieldsData.forEach(f => {
+      const li = document.createElement("li");
+      li.className = "field-item";
+      li.id = `item-${f.row}`;
+      li.innerHTML = `
+        <div class="field-header">
+          <span class="field-id">#${f.row}</span>
+          <span>Page ${f.page}</span>
+        </div>
+        <div class="input-group">
+          <label>Heading / Subheading</label>
+          <div style="font-size:12px; color:#444; margin-bottom:4px;">${f.heading || '-'} / ${f.subheading || '-'}</div>
+        </div>
+        <div class="input-group">
+          <label>Description (AI Instruction)</label>
+          <textarea id="desc-${f.row}" oninput="updateData(${f.row}, this.value)">${f.rich_description || ''}</textarea>
+        </div>
+      `;
+      li.onclick = () => selectField(f.row);
+      list.appendChild(li);
+    });
+  }
+
+  function selectField(rowId) {
+    // 1. Highlight List Item
+    document.querySelectorAll('.field-item').forEach(el => el.classList.remove('active'));
+    const item = document.getElementById(`item-${rowId}`);
+    if (item) {
+      item.classList.add('active');
+      item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // 2. Highlight Box
+    document.querySelectorAll('.field-box').forEach(el => el.classList.remove('active'));
+    const box = document.getElementById(`box-${rowId}`);
+    if (box) {
+      box.classList.add('active');
+      box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function updateData(rowId, value) {
+    const field = fieldsData.find(f => f.row === rowId);
+    if (field) {
+      field.rich_description = value;
+    }
+  }
+
+  async function saveMapping() {
+    // Convert data back to CSV
+    const orderedHeaders = [
+      "row",
+      "heading",
+      "subheading",
+      "form_entry_description",
+      "rich_description",
+      "x1",
+      "y1",
+      "x2",
+      "y2",
+      "page",
+    ];
+
+    let csvContent = orderedHeaders.join(",") + "\n";
+
+    fieldsData.forEach(row => {
+      const line = orderedHeaders.map(h => {
+        let val = row[h] === undefined ? "" : String(row[h]);
+        // Escape quotes if needed
+        if (val.includes(",") || val.includes("\n") || val.includes('"')) {
+          val = `"${val.replace(/"/g, '""')}"`;
+        }
+        return val;
+      }).join(",");
+      csvContent += line + "\n";
+    });
+
+    try {
+      const res = await fetch(`/api/mappings/${token}/${pdfId}/save`, {
+        method: "POST",
+        headers: { "Content-Type": "text/csv" },
+        body: csvContent,
+      });
+      if (res.ok) {
+        alert("Mapping saved successfully! You can now run the agent.");
+        window.close();
+      } else {
+        alert("Error saving mapping");
+      }
+    } catch (e) {
+      alert("Network error: " + e.message);
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
