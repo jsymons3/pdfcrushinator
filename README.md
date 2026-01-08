@@ -10,10 +10,9 @@ produces a JSON overlay and a filled PDF.
 python fill_form_pipeline.py \
     --pdf path/to/form.pdf \
     --csv path/to/form_map_rich.csv \
-    --request "Fill for Sip With Zoe 301 New York Ave NE unit 4A027 ..." \
+    --request "Fill for company x receiving goods from company y, these items etc. ..." \
     --json-out mapping.json \
-    --pdf-out overlay.pdf \
-    --output-name "Sip With Zoe.pdf"
+    --pdf-out overlay.pdf
 ```
 
 Requirements:
