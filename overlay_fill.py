@@ -53,9 +53,9 @@ def load_mapping(json_map_path: str) -> List[Dict[str, Any]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Overlay automapped values onto a PDF")
-    parser.add_argument("--pdf-in", required=True, help="Path to the original, unfilled PDF")
+    parser.add_argument("--pdf-in", "--pdf", dest="pdf_in", required=True, help="Path to the original, unfilled PDF")
     parser.add_argument("--json-map", required=True, help="Path to JSON mapping (row, page, x1,y1, value)")
-    parser.add_argument("--pdf-out", required=True, help="Path to write the overlay PDF")
+    parser.add_argument("--pdf-out", "--out", dest="pdf_out", required=True, help="Path to write the overlay PDF")
     args = parser.parse_args()
 
     mapping = load_mapping(args.json_map)

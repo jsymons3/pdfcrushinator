@@ -20,6 +20,7 @@ Requirements:
 - `OPENAI_API_KEY` must be exported; optionally set `OPENAI_BASE` for a
   compatible endpoint.
 - Dependencies: `openai`, `PyMuPDF` (fitz), and standard library modules.
+- Use `--output-name` to save the filled PDF with a human-friendly filename.
 
 The script builds the prompt (using the embedded instructions), calls the
 OpenAI Chat Completions API, saves the JSON mapping, and then renders the
