@@ -169,7 +169,7 @@ def main():
         batch_ids = [str(r["row"]) for r in batch_rows]
         print(f"Batch {i+1}: Reasoning on IDs {batch_ids[0]} to {batch_ids[-1]}...")
 
-        batch_results = call_gemini_vision(client, pdf_path, batch_rows, history_examples)
+        batch_results = call_gemini_vision(client, image_parts, batch_rows, history_examples)
         
         for r in batch_rows:
             rid = str(r["row"])

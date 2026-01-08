@@ -126,6 +126,24 @@ def read_csv_text(csv_path: Path) -> str:
         return f.read()
 
 
+def normalize_pdf_name(name: str, fallback_stem: str) -> str:
+    safe_name = Path(name).name if name else f"{fallback_stem}_overlay.pdf"
+    if not safe_name.lower().endswith(".pdf"):
+        safe_name = f"{safe_name}.pdf"
+    return safe_name
+
+
+def resolve_pdf_output_path(pdf_path: Path, pdf_out_arg: str, output_name: str) -> Path:
+    if pdf_out_arg:
+        output_dir = Path(pdf_out_arg).parent
+        default_name = Path(pdf_out_arg).name
+    else:
+        output_dir = pdf_path.parent
+        default_name = f"{pdf_path.stem}_overlay.pdf"
+    pdf_name = normalize_pdf_name(output_name or default_name, pdf_path.stem)
+    return output_dir / pdf_name
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate mapping JSON from a natural-language request and render the overlay.")
     parser.add_argument("--pdf", required=True, help="Path to the blank form PDF")
@@ -133,13 +151,18 @@ def main() -> None:
     parser.add_argument("--request", required=True, help="Natural-language request describing the form contents")
     parser.add_argument("--json-out", default="mapping.json", help="Where to write the JSON mapping")
     parser.add_argument("--pdf-out", default="overlay.pdf", help="Where to write the filled PDF overlay")
+    parser.add_argument(
+        "--output-name",
+        default="",
+        help="Optional filename for the saved PDF (defaults to --pdf-out or input name).",
+    )
     parser.add_argument("--model", default="gpt-4o-mini", help="OpenAI model to use")
     args = parser.parse_args()
 
     csv_path = Path(args.csv)
     pdf_path = Path(args.pdf)
     json_out_path = Path(args.json_out)
-    pdf_out_path = Path(args.pdf_out)
+    pdf_out_path = resolve_pdf_output_path(pdf_path, args.pdf_out, args.output_name)
 
     csv_text = read_csv_text(csv_path)
     prompt = build_prompt(csv_text, args.request)
