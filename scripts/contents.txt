@@ -1,0 +1,1 @@
+This folder contains all of the scripts that perform the heavy lifting in the crushinator

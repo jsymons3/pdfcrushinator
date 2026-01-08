@@ -1,0 +1,1139 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent — Agent Assist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Light base palette */
+      --bg-primary: #fafafa;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f5f5f5;
+      
+      /* Text colors */
+      --text-primary: #1a1a1a;
+      --text-secondary: #525252;
+      --text-tertiary: #737373;
+      --text-inverse: #ffffff;
+      
+      /* Borders */
+      --border-light: #e5e5e5;
+      --border-medium: #d4d4d4;
+      --border-strong: #a3a3a3;
+      
+      /* Accent colors - vibrant but tasteful */
+      --magenta: #ec4899;
+      --yellow: #fbbf24;
+      --cyan: #06b6d4;
+      
+      /* Semantic colors */
+      --success: #10b981;
+      --error: #ef4444;
+      --warning: #f59e0b;
+      
+      /* Shadows */
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+      --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+      
+      /* Radius */
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+    
+    /* Animated gradient background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: 
+        radial-gradient(ellipse 1000px 800px at 20% 30%, rgba(236, 72, 153, 0.08), transparent 50%),
+        radial-gradient(ellipse 1200px 700px at 80% 60%, rgba(6, 182, 212, 0.08), transparent 55%),
+        radial-gradient(ellipse 900px 900px at 50% 80%, rgba(251, 191, 36, 0.06), transparent 60%);
+      animation: gradientFlow 20s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+    
+    @keyframes gradientFlow {
+      0%, 100% { 
+        transform: translate(0, 0) rotate(0deg) scale(1); 
+      }
+      33% { 
+        transform: translate(3%, -3%) rotate(1deg) scale(1.02); 
+      }
+      66% { 
+        transform: translate(-3%, 3%) rotate(-1deg) scale(0.98); 
+      }
+    }
+    
+    /* Static header bar */
+    .header-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-light);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .header-logo img {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .header-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .header-info {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    .info-badge {
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-light);
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all 0.2s ease;
+    }
+    
+    .info-badge:hover {
+      border-color: var(--border-medium);
+      background: var(--bg-secondary);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .info-badge strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    /* Main content area */
+    .content-wrapper {
+      position: relative;
+      z-index: 1;
+      padding-top: 64px; /* Account for fixed header */
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 24px 60px;
+    }
+    
+    /* Grid layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 24px;
+      margin-top: 24px;
+    }
+    
+    /* Card system */
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+      box-shadow: var(--shadow-lg);
+      border-color: var(--border-medium);
+    }
+    
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(to bottom, var(--bg-secondary), var(--bg-tertiary));
+    }
+    
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .card-title::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+    
+    .card-badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(6, 182, 212, 0.1));
+      color: var(--text-primary);
+      border: 1px solid var(--border-light);
+    }
+    
+    .card-body {
+      padding: 24px;
+    }
+    
+    /* Instruction area */
+    .instruction-label {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    
+    .instruction-label strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      resize: vertical;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      border: 2px solid var(--border-light);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    
+    textarea::placeholder {
+      color: var(--text-tertiary);
+    }
+    
+    textarea:focus {
+      border-color: var(--cyan);
+      background: var(--bg-secondary);
+      box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+    }
+    
+    /* Buttons */
+    .action-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 20px 0;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 2px solid transparent;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.4s ease, height 0.4s ease;
+    }
+    
+    .btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+    
+    .btn span {
+      position: relative;
+      z-index: 1;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      border-color: var(--border-medium);
+      color: var(--text-primary);
+    }
+    
+    .btn-secondary:hover {
+      background: var(--bg-secondary);
+      border-color: var(--border-strong);
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, var(--magenta), var(--cyan));
+      color: var(--text-inverse);
+      border: none;
+      box-shadow: var(--shadow-md);
+    }
+    
+    .btn-primary:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-3px);
+    }
+    
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: var(--error);
+    }
+    
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    
+    .hint-text {
+      color: var(--text-tertiary);
+      font-size: 13px;
+      font-style: italic;
+    }
+    
+    input[type=file] {
+      display: none;
+    }
+    
+    /* Progress card */
+    .progress-card {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    
+    .progress-header {
+      padding: 16px 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .progress-body {
+      padding: 20px;
+    }
+    
+    .progress-bar-wrapper {
+      position: relative;
+      width: 100%;
+      height: 6px;
+      background: var(--border-light);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--magenta), var(--yellow), var(--cyan));
+      background-size: 200% 100%;
+      border-radius: 999px;
+      transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      animation: shimmerFlow 3s ease-in-out infinite;
+    }
+    
+    @keyframes shimmerFlow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    
+    .status-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .status-badge.idle {
+      background: var(--bg-tertiary);
+      color: var(--text-tertiary);
+      border: 1px solid var(--border-light);
+    }
+    
+    .status-badge.running {
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(236, 72, 153, 0.15));
+      color: var(--cyan);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .status-badge.done {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    
+    .status-badge.error {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--error);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    
+    /* Download links */
+    .download-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    
+    .download-links a {
+      color: var(--cyan);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      border: 2px solid rgba(6, 182, 212, 0.2);
+      background: rgba(6, 182, 212, 0.05);
+      transition: all 0.2s ease;
+    }
+    
+    .download-links a:hover {
+      background: rgba(6, 182, 212, 0.1);
+      border-color: rgba(6, 182, 212, 0.4);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    /* Error notice */
+    .error-notice {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      background: rgba(239, 68, 68, 0.05);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    
+    .error-notice .error-title {
+      color: var(--error);
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    
+    .error-notice .error-text {
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    
+    /* Library section */
+    .library-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .library-card {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    
+    .library-card-header {
+      padding: 16px 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .library-card-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    
+    .count-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(251, 191, 36, 0.1));
+      color: var(--text-primary);
+      border: 1px solid var(--border-light);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .library-card-body {
+      padding: 16px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    /* Custom scrollbar */
+    .library-card-body::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .library-card-body::-webkit-scrollbar-track {
+      background: var(--bg-tertiary);
+    }
+    
+    .library-card-body::-webkit-scrollbar-thumb {
+      background: var(--border-medium);
+      border-radius: 999px;
+    }
+    
+    .library-card-body::-webkit-scrollbar-thumb:hover {
+      background: var(--border-strong);
+    }
+    
+    /* Item list */
+    .item-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-light);
+      transition: all 0.2s ease;
+    }
+    
+    .list-item:hover {
+      border-color: var(--border-medium);
+      box-shadow: var(--shadow-sm);
+      transform: translateX(4px);
+    }
+    
+    .item-info .item-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    
+    .item-info .item-meta {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .item-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    
+    .item-actions .btn {
+      padding: 8px 14px;
+      font-size: 12px;
+    }
+    
+    /* Profile display */
+    .profile-info {
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text-secondary);
+    }
+    
+    .profile-info .profile-name {
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    
+    .profile-info .profile-brokerage {
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+    
+    .profile-info .profile-section {
+      margin-top: 12px;
+    }
+    
+    .profile-info .profile-label {
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
+      margin-bottom: 6px;
+    }
+    
+    .profile-info .profile-value {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    
+    /* Empty state */
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: 14px;
+    }
+    
+    .empty-state::before {
+      content: '✨';
+      display: block;
+      font-size: 32px;
+      margin-bottom: 12px;
+      opacity: 0.4;
+    }
+    
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .header-bar {
+        padding: 0 16px;
+      }
+      
+      .header-title {
+        font-size: 18px;
+      }
+      
+      .header-logo img {
+        width: 32px;
+        height: 32px;
+      }
+      
+      .header-info {
+        flex-direction: column;
+        gap: 8px;
+      }
+      
+      .info-badge {
+        font-size: 11px;
+        padding: 6px 12px;
+      }
+      
+      .container {
+        padding: 20px 16px 40px;
+      }
+      
+      .action-row {
+        flex-direction: column;
+      }
+      
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .download-links {
+        flex-direction: column;
+      }
+      
+      .download-links a {
+        width: 100%;
+        text-align: center;
+      }
+    }
+    
+    /* Loading spinner */
+    @keyframes rotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 3px solid var(--border-light);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: rotate 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    
+    /* Fade in animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .card {
+      animation: fadeIn 0.6s ease-out backwards;
+    }
+    
+    .card:nth-child(1) { animation-delay: 0.1s; }
+    .card:nth-child(2) { animation-delay: 0.2s; }
+  </style>
+</head>
+<body>
+  <!-- Static header bar -->
+  <div class="header-bar">
+    <div class="header-logo">
+      <img src="/static/agent_assist.png" alt="AI Agent logo"/>
+      <div class="header-title">Agent Assist</div>
+    </div>
+    <div class="header-info">
+      <div class="info-badge">
+        <span>Profile: <strong id="profileName">{{ profile_name }}</strong></span>
+      </div>
+      <div class="info-badge">
+        <span>Session: <strong>Active</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="content-wrapper">
+    <div class="container">
+      <div class="main-grid">
+        <!-- Command Panel -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Command Center</div>
+            <div class="card-badge" id="selectedPdfBadge">No PDF selected</div>
+          </div>
+          <div class="card-body">
+            <div class="instruction-label">
+              Select a saved PDF or upload a new one, then describe what you need. 
+              <strong>AI Agent</strong> will handle the rest with pixel-perfect accuracy.
+            </div>
+            
+            <textarea 
+              id="instruction" 
+              placeholder="Fill out this buyer-broker agreement for Jane Doe at 123 Main Street, listing price $450,000..."
+            ></textarea>
+
+            <div class="action-row">
+              <label class="btn btn-secondary" for="pdfUpload">
+                <span>📎 Upload PDF</span>
+              </label>
+              <input id="pdfUpload" type="file" accept="application/pdf"/>
+              
+              <button class="btn btn-primary" id="runBtn">
+                <span>▶ Run Agent</span>
+              </button>
+              
+              <span class="hint-text" id="hint">New PDFs may require mapping confirmation</span>
+            </div>
+
+            <div class="progress-card">
+              <div class="progress-header">
+                <div class="card-title">Progress</div>
+                <div class="status-badge idle" id="jobState">Idle</div>
+              </div>
+              <div class="progress-body">
+                <div class="progress-bar-wrapper">
+                  <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+                
+                <div class="status-text" id="statusText">Waiting for command...</div>
+                
+                <div class="download-links" id="downloads" style="display:none;">
+                  <a id="dlPdf" href="#" target="_blank">📄 Download PDF</a>
+                  <a id="dlJson" href="#" target="_blank">📊 Download JSON</a>
+                </div>
+                
+                <div class="error-notice" id="needsMapping" style="display:none;">
+                  <div class="error-title">⚠️ Mapping Required</div>
+                  <div class="error-text">
+                    This PDF needs field mapping confirmation. Download the annotated PDF and rich map, 
+                    confirm the mappings locally, then re-run the agent.
+                  </div>
+                  <div class="download-links" style="margin-top: 12px;">
+                    <a id="dlAnnotated" href="#" target="_blank">📝 Annotated PDF</a>
+                    <a id="dlRichMap" href="#" target="_blank">🗺️ Rich Map CSV</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Library Panel -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Library</div>
+            <div class="card-badge">Assets & History</div>
+          </div>
+          <div class="card-body">
+            <div class="library-grid">
+              <!-- Saved PDFs -->
+              <div class="library-card">
+                <div class="library-card-header">
+                  <div class="library-card-title">Saved PDFs</div>
+                  <div class="count-badge" id="pdfCount">0</div>
+                </div>
+                <div class="library-card-body">
+                  <div class="item-list" id="pdfList">
+                    <div class="empty-state">No PDFs saved yet</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- User Profile -->
+              <div class="library-card">
+                <div class="library-card-header">
+                  <div class="library-card-title">User Profile</div>
+                  <div class="count-badge" id="profileBadge">Loaded</div>
+                </div>
+                <div class="library-card-body">
+                  <div class="profile-info" id="profilePane">
+                    <div class="empty-state">Loading profile...</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Completed Jobs -->
+              <div class="library-card">
+                <div class="library-card-header">
+                  <div class="library-card-title">Completed</div>
+                  <div class="count-badge" id="doneCount">0</div>
+                </div>
+                <div class="library-card-body">
+                  <div class="item-list" id="doneList">
+                    <div class="empty-state">No completed jobs yet</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Token is provided by the backend when rendering this page.
+  const token = {{ token | tojson }};
+  let selectedPdfId = null;
+  let uploadedFile = null;
+
+  const el = (id) => document.getElementById(id);
+
+  function setSelectedBadge(text) {
+    el("selectedPdfBadge").textContent = text;
+    el("selectedPdfBadge").style.animation = 'pulse 0.5s ease';
+    setTimeout(() => el("selectedPdfBadge").style.animation = '', 500);
+  }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(t || ("HTTP " + res.status));
+    }
+    return res;
+  }
+
+  function renderPdfItem(pdf) {
+    const div = document.createElement("div");
+    div.className = "list-item";
+    div.innerHTML = `
+      <div class="item-info">
+        <div class="item-name">${pdf.display_name || pdf.name || pdf.id}</div>
+        <div class="item-meta">${pdf.id}</div>
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-secondary" data-pick="${pdf.id}">Select</button>
+        <a class="btn btn-secondary" href="/api/library/${token}/pdf/${pdf.id}" target="_blank">View</a>
+        <button class="btn btn-danger" data-del="${pdf.id}">Delete</button>
+      </div>
+    `;
+    div.querySelector("[data-pick]").onclick = () => {
+      selectedPdfId = pdf.id;
+      uploadedFile = null;
+      setSelectedBadge("Selected: " + (pdf.display_name || pdf.name || pdf.id));
+    };
+    div.querySelector("[data-del]").onclick = async () => {
+      if (confirm('Delete this PDF?')) {
+        await api(`/api/pdfs/${token}/${pdf.id}`, { method: "DELETE" });
+        if (selectedPdfId === pdf.id) {
+          selectedPdfId = null;
+          setSelectedBadge("No PDF selected");
+        }
+        await refreshAll();
+      }
+    };
+    return div;
+  }
+
+  function renderDoneItem(doc) {
+    const div = document.createElement("div");
+    div.className = "list-item";
+    const date = new Date(doc.created_at * 1000).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    div.innerHTML = `
+      <div class="item-info">
+        <div class="item-name">${doc.title}</div>
+        <div class="item-meta">${date}</div>
+      </div>
+      <div class="item-actions">
+        <a class="btn btn-secondary" href="${doc.pdf_url}" target="_blank">PDF</a>
+        <a class="btn btn-secondary" href="${doc.json_url}" target="_blank">JSON</a>
+        <button class="btn btn-danger" data-del="${doc.id}">Delete</button>
+      </div>
+    `;
+    div.querySelector("[data-del]").onclick = async () => {
+      if (confirm('Delete this completed job?')) {
+        await api(`/api/completed/${token}/${doc.id}`, { method: "DELETE" });
+        await refreshAll();
+      }
+    };
+    return div;
+  }
+
+  async function refreshAll() {
+    try {
+      // PDFs
+      const pdfs = await (await api(`/api/library/${token}`)).json();
+      const pdfList = el("pdfList");
+      pdfList.innerHTML = "";
+      el("pdfCount").textContent = pdfs.length;
+      
+      if (pdfs.length === 0) {
+        pdfList.innerHTML = '<div class="empty-state">No PDFs saved yet</div>';
+      } else {
+        pdfs.forEach(p => pdfList.appendChild(renderPdfItem(p)));
+      }
+
+      // Profile
+      const profile = await (await api(`/api/profile/${token}`)).json();
+      el("profileName").textContent = profile.agent_name;
+      el("profilePane").innerHTML = `
+        <div class="profile-name">${profile.agent_name}</div>
+        <div class="profile-brokerage">${profile.brokerage}</div>
+        <div class="profile-section">
+          <div class="profile-label">Default Settings</div>
+          <div class="profile-value">
+            Fee: ${profile.default_fee || 'Not set'} · 
+            Retainer: ${profile.default_retainer || 'Not set'} · 
+            Dual Agency: ${profile.default_dual_agency || 'Not set'}
+          </div>
+        </div>
+      `;
+
+      // Completed
+      const done = await (await api(`/api/completed/${token}`)).json();
+      const doneList = el("doneList");
+      doneList.innerHTML = "";
+      el("doneCount").textContent = done.length;
+      
+      if (done.length === 0) {
+        doneList.innerHTML = '<div class="empty-state">No completed jobs yet</div>';
+      } else {
+        done.forEach(d => doneList.appendChild(renderDoneItem(d)));
+      }
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+    }
+  }
+
+  el("pdfUpload").addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (f) {
+      uploadedFile = f;
+      selectedPdfId = null;
+      setSelectedBadge("📤 " + f.name);
+    }
+  });
+
+  function updateProgressBar(percent) {
+    el("progressBar").style.width = percent + "%";
+  }
+
+  function updateJobState(state) {
+    const badge = el("jobState");
+    badge.className = "status-badge " + state.toLowerCase();
+    badge.textContent = state;
+  }
+
+  async function poll(job_id) {
+    el("downloads").style.display = "none";
+    el("needsMapping").style.display = "none";
+
+    const timer = setInterval(async () => {
+      try {
+        const s = await (await api(`/api/jobs/${token}/${job_id}/status`)).json();
+        updateJobState(s.state);
+        updateProgressBar(s.progress || 0);
+        el("statusText").textContent = s.message || s.state;
+
+        if (s.state === "done") {
+          clearInterval(timer);
+          el("downloads").style.display = "flex";
+          el("dlPdf").href = s.pdf_url;
+          el("dlJson").href = s.json_url;
+          await refreshAll();
+        } else if (s.state === "needs_mapping") {
+          clearInterval(timer);
+          el("needsMapping").style.display = "block";
+          el("dlAnnotated").href = s.annotated_url;
+          el("dlRichMap").href = s.rich_map_url;
+          await refreshAll();
+        } else if (s.state === "error") {
+          clearInterval(timer);
+          el("statusText").innerHTML = `<span style="color: var(--error)">Error:</span> ${s.message || "Unknown error"}`;
+        }
+      } catch (err) {
+        clearInterval(timer);
+        el("statusText").innerHTML = `<span style="color: var(--error)">Error:</span> ${err.message}`;
+        updateJobState("error");
+      }
+    }, 1500);
+  }
+
+  el("runBtn").onclick = async () => {
+    const instruction = el("instruction").value.trim();
+    if (!instruction) {
+      alert("Please enter an instruction.");
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("instruction", instruction);
+
+    if (uploadedFile) {
+      fd.append("pdf", uploadedFile);
+    } else if (selectedPdfId) {
+      fd.append("pdf_id", selectedPdfId);
+    } else {
+      alert("Select a saved PDF or upload a new one.");
+      return;
+    }
+
+    updateJobState("starting");
+    updateProgressBar(2);
+    el("statusText").textContent = "Starting job...";
+
+    try {
+      const res = await api(`/api/jobs/${token}`, { method: "POST", body: fd });
+      const { job_id } = await res.json();
+      await poll(job_id);
+    } catch (err) {
+      el("statusText").innerHTML = `<span style="color: var(--error)">Error:</span> ${err.message}`;
+      updateJobState("error");
+    }
+  };
+
+  // Initialize
+  refreshAll();
+</script>
+</body>
+</html>
