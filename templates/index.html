@@ -967,6 +967,16 @@
         await refreshAll();
       }
     };
+    div.querySelector("[data-del]").onclick = async () => {
+      if (confirm('Delete this saved PDF and its mappings?')) {
+        await api(`/api/library/${token}/${pdf.id}`, { method: "DELETE" });
+        if (selectedPdfId === pdf.id) {
+          selectedPdfId = null;
+          setSelectedBadge("No PDF selected");
+        }
+        await refreshAll();
+      }
+    };
     return div;
   }
 
