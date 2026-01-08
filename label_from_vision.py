@@ -26,31 +26,27 @@ from google.genai import types
 # ------------------- CONFIG -------------------------------------------
 # Using the specific Gemini 3 Pro Preview model code you provided.
 MODEL_ID    = "gemini-3-pro-preview" 
-DPI         = 300       # High resolution for "pixel-perfect" vision
+DPI         = 200       # Balance clarity and memory use for vision inference
 BATCH_SIZE  = 100        # Smaller batch size to allow deep reasoning per item
 # ----------------------------------------------------------------------
 
-def pdf_to_image_parts(pdf_path: Path, dpi=DPI):
+def pdf_pages_to_image_parts(pdf_path: Path, pages: list[int], dpi=DPI):
     """
-    Convert PDF pages to high-res PNG bytes.
-    We do this manually to ensure we control the resolution (300 DPI)
-    so the model can clearly read small form text.
+    Convert selected PDF pages to PNG bytes.
+    We render only the pages needed for the current batch to reduce memory.
     """
     doc = fitz.open(pdf_path)
     parts = []
     
-    print(f"   Converting {len(doc)} pages to high-res images ({dpi} DPI) for Gemini 3 Vision...")
-    
-    for i, page in enumerate(doc):
-        # Convert page to PNG image
+    page_numbers = sorted({p for p in pages if 1 <= p <= len(doc)})
+    print(f"   Converting {len(page_numbers)} pages to images ({dpi} DPI) for Gemini 3 Vision...")
+    for page_number in page_numbers:
+        page = doc[page_number - 1]
         pix = page.get_pixmap(dpi=dpi, alpha=False)
         png_bytes = pix.tobytes("png")
+        parts.append(types.Part.from_bytes(data=png_bytes, mime_type="image/png"))
         
-        # Create a GenAI 'Part'
-        parts.append(
-            types.Part.from_bytes(data=png_bytes, mime_type="image/png")
-        )
-        
+    doc.close()
     return parts
 
 def build_prompt_text(batch_rows, history_examples):
@@ -101,10 +97,12 @@ def build_prompt_text(batch_rows, history_examples):
 
     return history_text + batch_text + instructions
 
-def call_gemini_vision(client, image_parts, batch_rows, history_examples):
+def call_gemini_vision(client, pdf_path, batch_rows, history_examples):
     """
     Sends images + prompt to Gemini 3 Pro.
     """
+    pages = [int(r.get("page") or 1) for r in batch_rows]
+    image_parts = pdf_pages_to_image_parts(pdf_path, pages)
     text_prompt = build_prompt_text(batch_rows, history_examples)
     contents = image_parts + [text_prompt]
 
@@ -152,10 +150,7 @@ def main():
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     print(f"Initialized Google GenAI Client with model: {MODEL_ID}")
 
-    # 1. Load Images (Vision Context)
-    image_parts = pdf_to_image_parts(pdf_path)
-
-    # 2. Load CSV (Data Context)
+    # 1. Load CSV (Data Context)
     print(f"Loading CSV data from {csv_path}...")
     df = pd.read_csv(csv_path)
     
