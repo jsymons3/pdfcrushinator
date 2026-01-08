@@ -118,6 +118,20 @@ def api_library_pdf(token: str, pdf_id: str):
             pass
     return FileResponse(str(p), media_type="application/pdf", filename=filename)
 
+@app.delete("/api/library/{token}/{pdf_id}")
+def api_library_delete(token: str, pdf_id: str):
+    load_profile(token)
+    pdf_path = LIBRARY_DIR / f"{pdf_id}.pdf"
+    meta_path = pdf_path.with_suffix(".json")
+    if pdf_path.exists():
+        pdf_path.unlink()
+    if meta_path.exists():
+        meta_path.unlink()
+    mapping_dir = MAPPINGS_DIR / pdf_id
+    if mapping_dir.exists():
+        shutil.rmtree(mapping_dir)
+    return {"ok": True}
+
 @app.get("/api/completed/{token}")
 def api_completed_list(token: str):
     load_profile(token)
