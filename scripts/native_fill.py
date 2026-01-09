@@ -22,7 +22,6 @@ import fitz  # PyMuPDF
 from typing import Dict, Any
 
 def rects_overlap(r1: fitz.Rect, r2: fitz.Rect) -> bool:
-    """Check if widget rect matches CSV rect with >80% overlap."""
     intersect = r1 & r2
     if intersect.is_empty: return False
     return (intersect.get_area() / r2.get_area()) > 0.8
@@ -36,7 +35,7 @@ def main():
     parser.add_argument("--out-flat", required=True, help="Path for Flattened PDF")
     args = parser.parse_args()
 
-    # 1. Load CSV Map
+    # 1. Load Map
     csv_map = {}
     with open(args.csv, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -135,5 +134,7 @@ def main():
     doc.save(args.out_flat)
     print(f"✓ Saved Flattened PDF: {args.out_flat}")
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
