@@ -6,6 +6,10 @@ Fills a PDF's interactive form fields and produces TWO outputs:
 1. An active, editable PDF (Vector text).
 2. A "Baked" PDF (Rasterized images) -> 100% visible in Mac Preview.
 
+Fixes:
+- "Ghost Text" in Preview (via widget.update for text)
+- "Disappearing Radio Buttons" (via SKIPPING widget.update for radios)
+
 Usage:
   python native_fill.py \
     --pdf original.pdf \
@@ -75,26 +79,34 @@ def main():
             if rects_overlap(widget.rect, target_rect):
                 found = True
                 
-                # Checkbox/Radio
+                # --- CHECKBOX / RADIO BUTTONS ---
                 if widget.field_type in (fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON):
                     # Robust boolean parsing
                     is_checked = str(val).lower() in ["x", "true", "yes", "on", "1", "checked"]
+                    
+                    # Set the state, but DO NOT call update()
+                    # Calling update() destroys the existing circle/check drawing.
                     widget.field_value = is_checked
-                    widget.update() 
+                    
+                    # We rely on the PDF viewer to switch the appearance state (AS)
+                    # based on the value change.
                 
-                # Text
+                # --- TEXT FIELDS ---
                 else:
                     # Force Helvetica for max compatibility
                     widget.text_font = "Helv"
                     widget.text_fontsize = 0 # Auto-size
                     widget.field_value = str(val)
-                    widget.update() # Force drawing command generation
+                    
+                    # MUST call update() here to generate the text appearance
+                    # otherwise Mac Preview shows it as invisible.
+                    widget.update() 
                 
                 fields_filled += 1
                 break
 
     # 5. Save Editable Version
-    # We try to set NeedAppearances to help Adobe/compatible readers
+    # Force viewers to re-render the form appearances (Crucial for the buttons we didn't update)
     try:
         catalog = doc.pdf_catalog() if hasattr(doc, "pdf_catalog") else doc.catalog
         if catalog:
@@ -109,15 +121,13 @@ def main():
     print(f"✓ Saved Editable PDF: {args.out_active}")
 
     # 6. Create "Baked" (Rasterized) Version
-    # This renders every page to an image and places it in a new PDF.
-    # It bypasses all "Ghost Form" issues in Preview.
+    # Renders the page (with current field states) to an image.
     
     print("   Rasterizing to ensure visibility in Mac Preview...")
     doc_flat = fitz.open()
     
     for page in doc:
         # DPI 200 is a good balance between print quality and file size
-        # alpha=False ensures white background (no transparent issues)
         pix = page.get_pixmap(dpi=200, alpha=False)
         
         # Create new blank page matching dimensions
