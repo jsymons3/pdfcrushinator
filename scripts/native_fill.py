@@ -114,9 +114,10 @@ def main():
     # This edits the PDF Catalog to force the viewer to generate appearances
     # if they are missing or corrupt.
     try:
-        if doc.catalog:
+        catalog_xref = doc.pdf_catalog()
+        if catalog_xref > 0:
             # Get the AcroForm dictionary
-            acroform_xref = doc.xref_get_key(doc.catalog, "AcroForm")
+            acroform_xref = doc.xref_get_key(catalog_xref, "AcroForm")
             if acroform_xref[0] != "null":
                 # Set NeedAppearances = true
                 xref = acroform_xref[1]
@@ -134,7 +135,9 @@ def main():
     # Flatten and Save Static Copy
     # This converts widgets to standard page content.
     # Works 100% in Preview/Chrome.
-    doc.flatten_form()
+    for page in doc:
+        for widget in list(page.widgets()):
+            page.flatten_annot(widget)
     doc.save(args.out_flat)
     print(f"✓ Saved Flattened PDF: {args.out_flat}")
 
