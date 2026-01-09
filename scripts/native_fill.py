@@ -79,7 +79,7 @@ def main() -> None:
                 # Checkbox Logic
                 if widget.field_type in (
                     fitz.PDF_WIDGET_TYPE_CHECKBOX,
-                    fitz.PDF_WIDGET_TYPE_RADIO,
+                    fitz.PDF_WIDGET_TYPE_RADIOBUTTON,
                 ):
                     check = str(val).lower() in ["true", "yes", "x", "on", "1"]
                     widget.field_value = check
