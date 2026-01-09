@@ -842,8 +842,15 @@
                 <div class="status-text" id="statusText">Waiting for command...</div>
                 
                 <div class="download-links" id="downloads" style="display:none;">
-                  <a id="dlPdf" href="#" target="_blank">📄 Download PDF</a>
-                  <a id="dlJson" href="#" target="_blank">📊 Download JSON</a>
+                  <a id="dlPdfFlat" href="#" target="_blank" class="btn btn-primary" style="background: var(--success); border:none; color:white;">
+                    🖨️ Flattened PDF (Best for Print/Preview)
+                  </a>
+                  <a id="dlPdfEdit" href="#" target="_blank" class="btn btn-secondary">
+                    ✏️ Editable PDF
+                  </a>
+                  <a id="dlJson" href="#" target="_blank" class="btn btn-secondary">
+                    📊 JSON
+                  </a>
                 </div>
                 
                 <div class="error-notice" id="needsMapping" style="display:none;">
@@ -991,13 +998,14 @@
       hour: '2-digit',
       minute: '2-digit'
     });
+    const viewUrl = doc.pdf_flat_url || doc.pdf_url;
     div.innerHTML = `
       <div class="item-info">
         <div class="item-name">${doc.title}</div>
         <div class="item-meta">${date}</div>
       </div>
       <div class="item-actions">
-        <a class="btn btn-secondary" href="${doc.pdf_url}" target="_blank">PDF</a>
+        <a class="btn btn-secondary" href="${viewUrl}" target="_blank">View</a>
         <a class="btn btn-secondary" href="${doc.json_url}" target="_blank">JSON</a>
         <button class="btn btn-danger" data-del="${doc.id}">Delete</button>
       </div>
@@ -1090,7 +1098,9 @@
         if (s.state === "done") {
           clearInterval(timer);
           el("downloads").style.display = "flex";
-          el("dlPdf").href = s.pdf_url;
+          const pdfFlatUrl = s.pdf_flat_url || s.pdf_url;
+          el("dlPdfFlat").href = pdfFlatUrl;
+          el("dlPdfEdit").href = s.pdf_editable_url || s.pdf_url;
           el("dlJson").href = s.json_url;
           await refreshAll();
         } else if (s.state === "needs_mapping") {
