@@ -3,8 +3,8 @@
 native_fill.py
 
 Fills a PDF's interactive form fields and produces TWO outputs:
-1. An active, editable PDF.
-2. A flattened, guaranteed-visible PDF (for Preview/Printing).
+1. An active, editable PDF (Vector text).
+2. A "Baked" PDF (Rasterized images) -> 100% visible in Mac Preview.
 
 Usage:
   python native_fill.py \
@@ -51,11 +51,9 @@ def main():
     with open(args.plan, "r") as f:
         fill_data = json.load(f)
 
-    # 3. Open PDF
+    # 3. Open PDF for Filling
     doc = fitz.open(args.pdf)
-    
-    # Enable form calculation handling
-    doc.form_calc = True
+    doc.form_calc = True # Let PyMuPDF calculate auto-sized text
 
     fields_filled = 0
 
@@ -79,62 +77,57 @@ def main():
                 
                 # Checkbox/Radio
                 if widget.field_type in (fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON):
+                    # Robust boolean parsing
                     is_checked = str(val).lower() in ["x", "true", "yes", "on", "1", "checked"]
                     widget.field_value = is_checked
                     widget.update() 
                 
                 # Text
                 else:
-                    # Force Helvetica to ensure visibility in Mac Preview
+                    # Force Helvetica for max compatibility
                     widget.text_font = "Helv"
-                    widget.text_fontsize = 0
+                    widget.text_fontsize = 0 # Auto-size
                     widget.field_value = str(val)
-                    widget.update()
+                    widget.update() # Force drawing command generation
                 
                 fields_filled += 1
                 break
 
-    # 5. Save Active (Editable) Copy
-    # Attempt to set NeedAppearances to true to force viewers to render text
+    # 5. Save Editable Version
+    # We try to set NeedAppearances to help Adobe/compatible readers
     try:
-        # Compatible access for doc.pdf_catalog() (newer) vs doc.catalog (older)
-        catalog_xref = doc.pdf_catalog() if hasattr(doc, "pdf_catalog") else doc.catalog
-        
-        if catalog_xref:
-            acroform_xref = doc.xref_get_key(catalog_xref, "AcroForm")
-            if acroform_xref[0] != "null":
-                xref = acroform_xref[1]
+        catalog = doc.pdf_catalog() if hasattr(doc, "pdf_catalog") else doc.catalog
+        if catalog:
+            acroform = doc.xref_get_key(catalog, "AcroForm")
+            if acroform[0] != "null":
+                xref = acroform[1]
                 if isinstance(xref, int) and xref > 0:
                      doc.xref_set_key(xref, "NeedAppearances", "true")
-    except Exception as e:
-        print(f"Note: Could not set NeedAppearances: {e}")
+    except: pass
 
     doc.save(args.out_active)
     print(f"✓ Saved Editable PDF: {args.out_active}")
 
-    # 6. Flatten and Save Static Copy
-    # We attempt multiple methods because PyMuPDF API changes frequently.
+    # 6. Create "Baked" (Rasterized) Version
+    # This renders every page to an image and places it in a new PDF.
+    # It bypasses all "Ghost Form" issues in Preview.
     
-    # Method A: Document-level form flattening (Best for modern versions)
-    if hasattr(doc, "flatten_form"):
-        try:
-            doc.flatten_form()
-        except Exception:
-            pass
-
-    # Method B: Page-level annotation flattening (Fallback)
+    print("   Rasterizing to ensure visibility in Mac Preview...")
+    doc_flat = fitz.open()
+    
     for page in doc:
-        # flatten_annots() (plural) is the modern page method
-        if hasattr(page, "flatten_annots"):
-            page.flatten_annots()
-        # flattenPage() is the legacy method
-        elif hasattr(page, "flattenPage"):
-            page.flattenPage()
+        # DPI 200 is a good balance between print quality and file size
+        # alpha=False ensures white background (no transparent issues)
+        pix = page.get_pixmap(dpi=200, alpha=False)
+        
+        # Create new blank page matching dimensions
+        new_page = doc_flat.new_page(width=page.rect.width, height=page.rect.height)
+        
+        # Draw the image of the filled form onto the new page
+        new_page.insert_image(page.rect, pixmap=pix)
 
-    doc.save(args.out_flat)
-    print(f"✓ Saved Flattened PDF: {args.out_flat}")
+    doc_flat.save(args.out_flat)
+    print(f"✓ Saved Flattened (Baked) PDF: {args.out_flat}")
 
-if __name__ == "__main__":
-    main()
 if __name__ == "__main__":
     main()
