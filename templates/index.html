@@ -847,14 +847,15 @@
                 </div>
                 
                 <div class="error-notice" id="needsMapping" style="display:none;">
-                  <div class="error-title">⚠️ Mapping Required</div>
+                  <div class="error-title">⚠️ Mapping Check Required</div>
                   <div class="error-text">
-                    This PDF needs field mapping confirmation. Download the annotated PDF and rich map, 
-                    confirm the mappings locally, then re-run the agent.
+                    The AI has analyzed this new form, but it needs your confirmation before filling.
+                    Open the visual editor to verify field labels.
                   </div>
-                  <div class="download-links" style="margin-top: 12px;">
-                    <a id="dlAnnotated" href="#" target="_blank">📝 Annotated PDF</a>
-                    <a id="dlRichMap" href="#" target="_blank">🗺️ Rich Map CSV</a>
+                  <div class="action-row" style="margin-top: 12px;">
+                    <a id="btnVerify" class="btn btn-secondary" href="#" target="_blank">
+                      <span>🛠 Open Mapping Editor</span>
+                    </a>
                   </div>
                 </div>
               </div>
@@ -948,6 +949,7 @@
       </div>
       <div class="item-actions">
         <button class="btn btn-secondary" data-pick="${pdf.id}">Select</button>
+        <a class="btn btn-secondary" href="/t/${token}/map/${pdf.id}" target="_blank">Map</a>
         <a class="btn btn-secondary" href="/api/library/${token}/pdf/${pdf.id}" target="_blank">View</a>
         <button class="btn btn-danger" data-del="${pdf.id}">Delete</button>
       </div>
@@ -1094,8 +1096,7 @@
         } else if (s.state === "needs_mapping") {
           clearInterval(timer);
           el("needsMapping").style.display = "block";
-          el("dlAnnotated").href = s.annotated_url;
-          el("dlRichMap").href = s.rich_map_url;
+          el("btnVerify").href = `/t/${token}/map/${s.pdf_id}`;
           await refreshAll();
         } else if (s.state === "error") {
           clearInterval(timer);
