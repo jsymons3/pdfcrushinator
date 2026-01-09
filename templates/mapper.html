@@ -14,7 +14,9 @@
       --border: #e5e5e5;
       --accent: #06b6d4;
       --text: #1a1a1a;
+      --highlight: #ec4899;
     }
+    * { box-sizing: border-box; }
     body {
       font-family: 'DM Sans', sans-serif;
       margin: 0;
@@ -23,8 +25,10 @@
       height: 100vh;
       display: flex;
       flex-direction: column;
+      overflow: hidden; /* Prevent body scroll */
     }
 
+    /* Toolbar */
     .toolbar {
       height: 60px;
       background: var(--bg-panel);
@@ -34,32 +38,25 @@
       justify-content: space-between;
       padding: 0 20px;
       flex-shrink: 0;
+      z-index: 100;
     }
-    .title {
-      font-weight: 700;
-      font-size: 18px;
-    }
+    .title { font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+    .zoom-controls { display: flex; gap: 5px; background: #f1f5f9; padding: 4px; border-radius: 6px; }
+    .btn-icon { width: 28px; height: 28px; border: none; background: white; border-radius: 4px; cursor: pointer; font-weight: bold; color: #555; }
+    .btn-icon:hover { background: #e2e8f0; }
+
     .btn {
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: none;
-      font-weight: 600;
-      cursor: pointer;
-      background: var(--accent);
-      color: white;
-      font-size: 14px;
+      padding: 8px 16px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer;
+      background: var(--accent); color: white; font-size: 14px;
     }
     .btn:hover { opacity: 0.9; }
-    .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-      margin-right: 10px;
-    }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); margin-right: 10px; }
 
+    /* Main Layout */
     .main {
       display: flex;
       flex: 1;
+      height: calc(100vh - 60px); /* Exact height minus toolbar */
       overflow: hidden;
     }
 
@@ -67,42 +64,51 @@
     .pdf-container {
       flex: 1;
       background: #525659;
-      overflow: auto;
+      overflow: auto; /* Enable Scroll */
       position: relative;
-      display: flex;
-      justify-content: center;
-      padding: 20px;
+      padding: 40px;
+      text-align: center;
     }
-    .pdf-page {
+
+    .pdf-page-wrapper {
       position: relative;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      display: inline-block; /* Allows centering */
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
       margin-bottom: 20px;
+      background: white;
+      vertical-align: top;
     }
 
     /* Overlay Boxes */
     .field-box {
       position: absolute;
-      border: 2px solid rgba(236, 72, 153, 0.6);
+      border: 2px solid rgba(236, 72, 153, 0.5);
       background: rgba(236, 72, 153, 0.1);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.1s;
+      z-index: 5;
     }
-    .field-box:hover,
+    .field-box:hover {
+      border-color: var(--highlight);
+      background: rgba(236, 72, 153, 0.25);
+      z-index: 20;
+    }
     .field-box.active {
-      border-color: #ec4899;
-      background: rgba(236, 72, 153, 0.3);
-      z-index: 10;
+      border-color: var(--highlight);
+      background: rgba(236, 72, 153, 0.4);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 10px rgba(236, 72, 153, 0.5);
+      z-index: 20;
     }
     .field-badge {
       position: absolute;
-      top: -14px;
-      left: -2px;
-      background: #ec4899;
+      top: -16px; left: -2px;
+      background: var(--highlight);
       color: white;
-      font-size: 10px;
-      padding: 1px 4px;
-      border-radius: 2px;
+      font-size: 11px;
+      padding: 2px 5px;
+      border-radius: 3px;
       font-weight: bold;
+      pointer-events: none;
     }
 
     /* Editor Sidebar */
@@ -112,7 +118,13 @@
       border-left: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      height: 100%;
+      flex-shrink: 0;
+      z-index: 50;
+    }
+    .sidebar-header {
+      padding: 15px; border-bottom: 1px solid var(--border); background: #f8fafc;
+      font-size: 13px; color: #64748b;
     }
     .fields-list {
       flex: 1;
@@ -122,65 +134,48 @@
       margin: 0;
     }
     .field-item {
-      padding: 15px;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
+      padding: 15px; border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background 0.1s;
     }
-    .field-item:hover { background: #f9fafb; }
+    .field-item:hover { background: #f8fafc; }
     .field-item.active {
       background: #f0fdfa;
       border-left: 4px solid var(--accent);
     }
 
-    .field-header {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      font-size: 12px;
-      color: #666;
-    }
-    .field-id {
-      font-family: 'JetBrains Mono', monospace;
-      font-weight: bold;
-      background: #eee;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
+    .field-meta { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; }
+    .field-id { font-family: 'JetBrains Mono', monospace; background: #e2e8f0; color: #475569; padding: 1px 6px; border-radius: 3px; }
 
-    .input-group label {
-      display: block;
-      font-size: 11px;
-      font-weight: 700;
-      color: #888;
-      margin-bottom: 4px;
-    }
-    .input-group input,
-    .input-group textarea {
+    .field-label { font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 8px; line-height: 1.4; }
+
+    textarea.field-input {
       width: 100%;
-      padding: 8px;
+      padding: 10px;
       border: 1px solid var(--border);
-      border-radius: 4px;
+      border-radius: 6px;
       font-family: 'DM Sans', sans-serif;
       font-size: 13px;
-    }
-    .input-group textarea {
+      line-height: 1.5;
       resize: vertical;
-      min-height: 60px;
+      min-height: 70px;
+      background: #fff;
     }
-
-    .status-bar {
-      padding: 10px 20px;
-      font-size: 12px;
-      color: #666;
-      background: #f5f5f5;
-      border-top: 1px solid var(--border);
+    textarea.field-input:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.1);
     }
   </style>
 </head>
 <body>
 
 <div class="toolbar">
-  <div class="title">Mapping Editor</div>
+  <div class="title">
+    <span>Map Editor</span>
+    <div class="zoom-controls">
+      <button class="btn-icon" onclick="changeZoom(-0.2)">-</button>
+      <button class="btn-icon" onclick="resetZoom()">100%</button>
+      <button class="btn-icon" onclick="changeZoom(0.2)">+</button>
+    </div>
+  </div>
   <div>
     <button class="btn btn-outline" onclick="window.close()">Close</button>
     <button class="btn" onclick="saveMapping()">Save & Confirm</button>
@@ -189,14 +184,18 @@
 
 <div class="main">
   <!-- PDF Render Area -->
-  <div class="pdf-container" id="pdfContainer"></div>
+  <div class="pdf-container" id="pdfContainer">
+    <!-- Pages injected here -->
+  </div>
 
   <!-- Sidebar Form -->
   <div class="sidebar">
-    <div style="padding: 15px; border-bottom: 1px solid var(--border); font-size: 13px; color: #666;">
-      Click a field on the PDF or select from the list to edit its description.
+    <div class="sidebar-header">
+      Select a field to edit its AI instruction.
     </div>
-    <ul class="fields-list" id="fieldsList"></ul>
+    <ul class="fields-list" id="fieldsList">
+      <!-- Items injected here -->
+    </ul>
   </div>
 </div>
 
@@ -204,86 +203,148 @@
   const token = "{{ token }}";
   const pdfId = "{{ pdf_id }}";
   let pdfDoc = null;
-  let fieldsData = []; // Will hold CSV data
-  const scale = 1.2; // Zoom level
+  let fieldsData = [];
+  let currentScale = 1.0;
 
   async function init() {
-    // 1. Load CSV Data
-    const csvRes = await fetch(`/api/mappings/${token}/${pdfId}/rich`);
-    const csvText = await csvRes.text();
-    fieldsData = parseCSV(csvText);
-    renderSidebar();
+    try {
+      // 1. Load CSV Data
+      const csvRes = await fetch(`/api/mappings/${token}/${pdfId}/rich`);
+      if(!csvRes.ok) throw new Error("Failed to load CSV");
+      const csvText = await csvRes.text();
+      fieldsData = parseCSV(csvText);
+      renderSidebar();
 
-    // 2. Load PDF
-    const loadingTask = pdfjsLib.getDocument(`/api/mappings/${token}/${pdfId}/annotated`);
-    pdfDoc = await loadingTask.promise;
+      // 2. Load PDF
+      const loadingTask = pdfjsLib.getDocument(`/api/mappings/${token}/${pdfId}/annotated`);
+      pdfDoc = await loadingTask.promise;
+      renderPDF();
+    } catch (e) {
+      alert("Error initializing: " + e.message);
+      console.error(e);
+    }
+  }
+
+  // --- Robust CSV Parser (Fixes NaN and Quotes) ---
+  function parseCSV(text) {
+    // 1. Split into lines, handle CRLF
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) return [];
+
+    // 2. Extract Headers (Trim whitespace!)
+    const headers = parseLine(lines[0]).map(h => h.trim());
+
+    const result = [];
+    for (let i = 1; i < lines.length; i++) {
+      const currentLine = parseLine(lines[i]);
+      // Skip malformed lines
+      if (currentLine.length < headers.length) continue;
+
+      const obj = {};
+      headers.forEach((h, index) => {
+        obj[h] = currentLine[index] || "";
+      });
+
+      // Type conversion
+      // Use logical defaults if parsing fails
+      obj.row = parseInt(obj.row) || 0;
+      obj.page = parseInt(obj.page) || 1;
+      obj.x1 = parseFloat(obj.x1) || 0;
+      obj.y1 = parseFloat(obj.y1) || 0;
+      obj.x2 = parseFloat(obj.x2) || 0;
+      obj.y2 = parseFloat(obj.y2) || 0;
+
+      result.push(obj);
+    }
+    return result;
+  }
+
+  // Parse a single CSV line handling quotes and commas
+  function parseLine(text) {
+    const res = [];
+    let entry = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+
+      if (char === '"') {
+        // Handle escaped quote ("") vs end quote
+        if (inQuotes && text[i + 1] === '"') {
+          entry += '"';
+          i++; // Skip next quote
+        } else {
+          inQuotes = !inQuotes; // Toggle
+        }
+      } else if (char === ',' && !inQuotes) {
+        res.push(entry);
+        entry = "";
+      } else {
+        entry += char;
+      }
+    }
+    res.push(entry);
+    return res;
+  }
+
+  // --- PDF Rendering ---
+  function changeZoom(delta) {
+    currentScale = Math.max(0.5, Math.min(3.0, currentScale + delta));
     renderPDF();
   }
 
-  function parseCSV(text) {
-    const lines = text.split('\n').filter(l => l.trim());
-    const headers = lines[0].split(',').map(h => h.trim());
-    return lines.slice(1).map(line => {
-      // Simple CSV parser (doesn't handle quoted commas perfectly, but sufficient for this demo)
-      // A robust app should use a library like PapaParse
-      const values = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
-      const cleanValues = values.map(v => v ? v.replace(/^"|"$/g, '') : '');
-
-      // Map to object based on headers
-      const obj = {};
-      headers.forEach((h, i) => obj[h] = cleanValues[i] || '');
-
-      // Convert numbers
-      obj.row = parseInt(obj.row, 10);
-      obj.page = parseInt(obj.page, 10);
-      obj.x1 = parseFloat(obj.x1);
-      obj.y1 = parseFloat(obj.y1);
-      obj.x2 = parseFloat(obj.x2);
-      obj.y2 = parseFloat(obj.y2);
-      return obj;
-    });
+  function resetZoom() {
+    currentScale = 1.0;
+    renderPDF();
   }
 
   async function renderPDF() {
     const container = document.getElementById('pdfContainer');
-    container.innerHTML = ''; // Clear
+    container.innerHTML = '';
 
     for (let num = 1; num <= pdfDoc.numPages; num++) {
       const page = await pdfDoc.getPage(num);
-      const viewport = page.getViewport({ scale });
+      const viewport = page.getViewport({ scale: currentScale });
 
-      const div = document.createElement("div");
-      div.className = "pdf-page";
-      div.style.width = viewport.width + "px";
-      div.style.height = viewport.height + "px";
+      // Create Wrapper
+      const wrapper = document.createElement("div");
+      wrapper.className = "pdf-page-wrapper";
+      wrapper.style.width = viewport.width + "px";
+      wrapper.style.height = viewport.height + "px";
 
+      // Canvas
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      div.appendChild(canvas);
+      wrapper.appendChild(canvas);
 
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      // Async render
+      page.render({ canvasContext: canvas.getContext('2d'), viewport });
 
-      // Render Overlay Boxes for this page
-      renderOverlays(div, num);
+      // Render Overlays
+      renderOverlays(wrapper, num, viewport);
 
-      container.appendChild(div);
+      container.appendChild(wrapper);
     }
   }
 
-  function renderOverlays(pageDiv, pageNum) {
+  function renderOverlays(pageDiv, pageNum, viewport) {
+    // Filter fields for this page
     const pageFields = fieldsData.filter(f => f.page === pageNum);
 
     pageFields.forEach(f => {
-      // PDF coords are usually bottom-left origin, but PyMuPDF rects are usually top-left.
-      // Assuming coordinates from extract script match the PDF.js viewport.
-      // We often need to scale because PDF.js scale might differ from PyMuPDF's definition.
+      // Logic: The Coordinates in CSV are from PyMuPDF (Unscaled points).
+      // PDF.js Viewport handles the scaling (Points -> Pixels * Zoom).
+      // We assume standard PDF coordinates (Bottom-Left origin) BUT...
+      // PyMuPDF usually extracts Rects as (x0, y0, x1, y1) with Top-Left origin
+      // relative to the unscaled page.
+      // PDF.js default viewport usually assumes Top-Left origin for HTML overlay
+      // compatibility. Let's try direct scaling first.
 
-      // Simple scaling if coords are top-down points:
-      const x = f.x1 * scale;
-      const y = f.y1 * scale;
-      const w = (f.x2 - f.x1) * scale;
-      const h = (f.y2 - f.y1) * scale;
+      const x = f.x1 * currentScale;
+      const y = f.y1 * currentScale;
+      const w = (f.x2 - f.x1) * currentScale;
+      const h = (f.y2 - f.y1) * currentScale;
 
       const box = document.createElement("div");
       box.className = "field-box";
@@ -304,48 +365,62 @@
     });
   }
 
+  // --- Sidebar Logic ---
   function renderSidebar() {
     const list = document.getElementById("fieldsList");
     list.innerHTML = '';
+
+    // Sort by Page then Row
+    fieldsData.sort((a,b) => a.page - b.page || a.row - b.row);
 
     fieldsData.forEach(f => {
       const li = document.createElement("li");
       li.className = "field-item";
       li.id = `item-${f.row}`;
+
+      const displayText = f.heading ? `${f.heading} / ${f.subheading}` : `(Field #${f.row})`;
+
       li.innerHTML = `
-        <div class="field-header">
+        <div class="field-meta">
           <span class="field-id">#${f.row}</span>
           <span>Page ${f.page}</span>
         </div>
-        <div class="input-group">
-          <label>Heading / Subheading</label>
-          <div style="font-size:12px; color:#444; margin-bottom:4px;">${f.heading || '-'} / ${f.subheading || '-'}</div>
-        </div>
-        <div class="input-group">
-          <label>Description (AI Instruction)</label>
-          <textarea id="desc-${f.row}" oninput="updateData(${f.row}, this.value)">${f.rich_description || ''}</textarea>
-        </div>
+        <div class="field-label">${displayText}</div>
+        <textarea class="field-input" placeholder="Enter AI Description..."
+          oninput="updateData(${f.row}, this.value)"
+          onfocus="focusBox(${f.row})"
+        >${f.rich_description || ''}</textarea>
       `;
-      li.onclick = () => selectField(f.row);
+      li.onclick = (e) => {
+        // Only trigger select if not clicking the textarea
+        if(e.target.tagName !== 'TEXTAREA') selectField(f.row);
+      };
       list.appendChild(li);
     });
   }
 
-  function selectField(rowId) {
-    // 1. Highlight List Item
-    document.querySelectorAll('.field-item').forEach(el => el.classList.remove('active'));
-    const item = document.getElementById(`item-${rowId}`);
-    if (item) {
-      item.classList.add('active');
-      item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    // 2. Highlight Box
+  function focusBox(rowId) {
+    // Highlight box without scrolling sidebar
     document.querySelectorAll('.field-box').forEach(el => el.classList.remove('active'));
     const box = document.getElementById(`box-${rowId}`);
     if (box) {
       box.classList.add('active');
       box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function selectField(rowId) {
+    // 1. Highlight Box
+    focusBox(rowId);
+
+    // 2. Highlight Sidebar & Focus Input
+    document.querySelectorAll('.field-item').forEach(el => el.classList.remove('active'));
+    const item = document.getElementById(`item-${rowId}`);
+    if (item) {
+      item.classList.add('active');
+      item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // const input = item.querySelector('textarea');
+      // input.focus();
     }
   }
 
@@ -357,27 +432,20 @@
   }
 
   async function saveMapping() {
-    // Convert data back to CSV
-    const orderedHeaders = [
-      "row",
-      "heading",
-      "subheading",
-      "form_entry_description",
-      "rich_description",
-      "x1",
-      "y1",
-      "x2",
-      "y2",
-      "page",
-    ];
+    const button = document.querySelector('.toolbar .btn:last-child');
+    button.textContent = "Saving...";
+    button.disabled = true;
 
-    let csvContent = orderedHeaders.join(",") + "\n";
+    // Convert data back to CSV manually to handle quotes properly
+    const headers = ["row", "heading", "subheading", "form_entry_description", "rich_description", "x1", "y1", "x2", "y2", "page"];
+
+    let csvContent = headers.join(",") + "\n";
 
     fieldsData.forEach(row => {
-      const line = orderedHeaders.map(h => {
+      const line = headers.map(h => {
         let val = row[h] === undefined ? "" : String(row[h]);
-        // Escape quotes if needed
-        if (val.includes(",") || val.includes("\n") || val.includes('"')) {
+        // Escape quotes: " -> "" and wrap in "..." if contains special chars
+        if (val.search(/("|,|\n)/g) >= 0) {
           val = `"${val.replace(/"/g, '""')}"`;
         }
         return val;
@@ -389,16 +457,23 @@
       const res = await fetch(`/api/mappings/${token}/${pdfId}/save`, {
         method: "POST",
         headers: { "Content-Type": "text/csv" },
-        body: csvContent,
+        body: csvContent
       });
+
       if (res.ok) {
-        alert("Mapping saved successfully! You can now run the agent.");
-        window.close();
+        button.textContent = "Saved!";
+        setTimeout(() => {
+          button.textContent = "Save & Confirm";
+          button.disabled = false;
+          window.close();
+        }, 1000);
       } else {
-        alert("Error saving mapping");
+        throw new Error("Server returned error");
       }
     } catch (e) {
-      alert("Network error: " + e.message);
+      alert("Error saving: " + e.message);
+      button.textContent = "Save & Confirm";
+      button.disabled = false;
     }
   }
 
