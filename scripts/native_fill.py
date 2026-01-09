@@ -2,17 +2,17 @@
 """
 native_fill.py
 
-Fills a PDF's interactive form fields (AcroForms) by joining a minimal JSON plan
-with a CSV coordinate map.
-
-Includes fixes for "Invisible Text" bugs in macOS Preview.
+Fills a PDF's interactive form fields and produces TWO outputs:
+1. An active, editable PDF.
+2. A flattened, guaranteed-visible PDF (for Preview/Printing).
 
 Usage:
   python native_fill.py \
-    --pdf original_form.pdf \
+    --pdf original.pdf \
     --csv map_rich.csv \
     --plan fill_plan.json \
-    --out filled_signed.pdf
+    --out-active filled_editable.pdf \
+    --out-flat filled_flattened.pdf
 """
 
 import argparse
@@ -30,10 +30,11 @@ def rects_overlap(r1: fitz.Rect, r2: fitz.Rect) -> bool:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pdf", required=True, help="Path to ORIGINAL interactive PDF")
-    parser.add_argument("--csv", required=True, help="Path to Map CSV (for coordinates)")
-    parser.add_argument("--plan", required=True, help="Path to Fill Plan JSON (values)")
-    parser.add_argument("--out", required=True, help="Path to save filled PDF")
+    parser.add_argument("--pdf", required=True, help="Original interactive PDF")
+    parser.add_argument("--csv", required=True, help="Map CSV")
+    parser.add_argument("--plan", required=True, help="Fill Plan JSON")
+    parser.add_argument("--out-active", required=True, help="Path for Editable PDF")
+    parser.add_argument("--out-flat", required=True, help="Path for Flattened PDF")
     args = parser.parse_args()
 
     # 1. Load CSV Map
@@ -125,10 +126,17 @@ def main():
     except Exception as e:
         print(f"Note: Could not set NeedAppearances flag: {e}")
 
-    # Save
-    doc.save(args.out)
+    # Save Active (Editable) Copy
+    doc.save(args.out_active)
     print(f"✓ Native fill complete. {fields_filled} fields updated.")
-    print(f"✓ Saved to: {args.out}")
+    print(f"✓ Saved Editable PDF: {args.out_active}")
+
+    # Flatten and Save Static Copy
+    # This converts widgets to standard page content.
+    # Works 100% in Preview/Chrome.
+    doc.flatten_form()
+    doc.save(args.out_flat)
+    print(f"✓ Saved Flattened PDF: {args.out_flat}")
 
 if __name__ == "__main__":
     main()

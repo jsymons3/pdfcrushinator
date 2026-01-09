@@ -335,7 +335,8 @@ async def create_job(
                 raise RuntimeError(f"generate_fill_json failed:\n{r3.stderr}\n{r3.stdout}")
 
             set_status(job_dir, "running", 78, "Native filling (AcroForms)…")
-            filled_pdf = job_dir / "filled.pdf"
+            filled_active = job_dir / "filled_editable.pdf"
+            filled_flat = job_dir / "filled_flattened.pdf"
 
             # Calls native_fill.py
             # IMPORTANT: Pass 'input_pdf_path' (Original Clean PDF) for final output
@@ -350,8 +351,10 @@ async def create_job(
                     str(rich_csv),
                     "--plan",
                     str(fill_json),
-                    "--out",
-                    str(filled_pdf),
+                    "--out-active",
+                    str(filled_active),
+                    "--out-flat",
+                    str(filled_flat),
                 ],
                 capture_output=True,
                 text=True,
@@ -363,14 +366,16 @@ async def create_job(
             done_id = job_id
             done_dir = DONE_DIR / done_id
             done_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(filled_pdf, done_dir / "filled.pdf")
+            shutil.copyfile(filled_active, done_dir / "filled_editable.pdf")
+            shutil.copyfile(filled_flat, done_dir / "filled_flattened.pdf")
             shutil.copyfile(fill_json, done_dir / "fill_plan.json")
 
             meta = {
                 "id": done_id,
                 "title": f"{input_name} • {profile.get('agent_name','')}",
                 "created_at": time.time(),
-                "pdf_url": f"/api/completed/{token}/{done_id}/pdf",
+                "pdf_editable_url": f"/api/completed/{token}/{done_id}/pdf_editable",
+                "pdf_flat_url": f"/api/completed/{token}/{done_id}/pdf_flat",
                 "json_url": f"/api/completed/{token}/{done_id}/json",
             }
             (done_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
@@ -381,7 +386,8 @@ async def create_job(
                 100,
                 "Done.",
                 extra={
-                    "pdf_url": meta["pdf_url"],
+                    "pdf_editable_url": meta["pdf_editable_url"],
+                    "pdf_flat_url": meta["pdf_flat_url"],
                     "json_url": meta["json_url"],
                 },
             )
@@ -406,13 +412,41 @@ def job_status(token: str, job_id: str):
     return read_status(job_dir)
 
 
-@app.get("/api/completed/{token}/{doc_id}/pdf")
-def completed_pdf(token: str, doc_id: str):
+@app.get("/api/completed/{token}/{doc_id}/pdf_editable")
+def completed_pdf_editable(token: str, doc_id: str):
     load_profile(token)
-    p = DONE_DIR / doc_id / "filled.pdf"
+    p = DONE_DIR / doc_id / "filled_editable.pdf"
     if not p.exists():
         raise HTTPException(404, "Not found")
-    return FileResponse(str(p), media_type="application/pdf", filename="filled.pdf")
+    return FileResponse(
+        str(p),
+        media_type="application/pdf",
+        filename="filled_editable.pdf",
+    )
+
+
+@app.get("/api/completed/{token}/{doc_id}/pdf_flat")
+def completed_pdf_flat(token: str, doc_id: str):
+    load_profile(token)
+    p = DONE_DIR / doc_id / "filled_flattened.pdf"
+    if not p.exists():
+        raise HTTPException(404, "Not found")
+    return FileResponse(
+        str(p),
+        media_type="application/pdf",
+        filename="filled_flattened.pdf",
+    )
+
+
+@app.get("/api/completed/{token}/{doc_id}/pdf")
+def completed_pdf_legacy(token: str, doc_id: str):
+    load_profile(token)
+    preferred = DONE_DIR / doc_id / "filled_flattened.pdf"
+    fallback = DONE_DIR / doc_id / "filled.pdf"
+    p = preferred if preferred.exists() else fallback
+    if not p.exists():
+        raise HTTPException(404, "Not found")
+    return FileResponse(str(p), media_type="application/pdf", filename=p.name)
 
 
 @app.get("/api/completed/{token}/{doc_id}/json")
