@@ -2,98 +2,133 @@
 """
 native_fill.py
 
-1. Loads the Map CSV (for geometry/coordinates).
-2. Loads the Fill JSON (for values).
-3. JOINS them by 'row' ID.
-4. Fills the PDF widgets natively.
+Fills a PDF's interactive form fields (AcroForms) by joining a minimal JSON plan
+with a CSV coordinate map.
+
+Includes fixes for "Invisible Text" bugs in macOS Preview.
+
+Usage:
+  python native_fill.py \
+    --pdf original_form.pdf \
+    --csv map_rich.csv \
+    --plan fill_plan.json \
+    --out filled_signed.pdf
 """
 
 import argparse
-import csv
 import json
-from typing import Any, Dict
-
-import fitz
-
+import csv
+import fitz  # PyMuPDF
+from typing import Dict, Any
 
 def rects_overlap(r1: fitz.Rect, r2: fitz.Rect) -> bool:
-    """Check if widget rect matches CSV rect."""
+    """Check if widget rect matches CSV rect with >80% overlap."""
     intersect = r1 & r2
     if intersect.is_empty:
         return False
     return (intersect.get_area() / r2.get_area()) > 0.8
 
-
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pdf", required=True, help="Original PDF form")
-    parser.add_argument("--csv", required=True, help="Map CSV (for coordinates)")
-    parser.add_argument("--plan", required=True, help="Fill Plan JSON (values)")
-    parser.add_argument("--out", required=True, help="Output PDF")
+    parser.add_argument("--pdf", required=True, help="Path to ORIGINAL interactive PDF")
+    parser.add_argument("--csv", required=True, help="Path to Map CSV (for coordinates)")
+    parser.add_argument("--plan", required=True, help="Path to Fill Plan JSON (values)")
+    parser.add_argument("--out", required=True, help="Path to save filled PDF")
     args = parser.parse_args()
 
-    # 1. Load CSV Map (The "Schema")
-    # We need this to know where Row 10 is located on the page.
-    csv_map: Dict[int, Dict[str, Any]] = {}
+    # 1. Load CSV Map
+    csv_map = {}
     with open(args.csv, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
-            # Store rect data keyed by Row ID
-            csv_map[int(r["row"])] = {
-                "page": int(r["page"]),
-                "rect": fitz.Rect(
-                    float(r["x1"]),
-                    float(r["y1"]),
-                    float(r["x2"]),
-                    float(r["y2"]),
-                ),
-            }
+            try:
+                csv_map[int(r['row'])] = {
+                    "page": int(r['page']),
+                    "rect": fitz.Rect(float(r['x1']), float(r['y1']), float(r['x2']), float(r['y2']))
+                }
+            except (ValueError, KeyError):
+                continue
 
-    # 2. Load JSON Plan (The "Data")
+    # 2. Load JSON Plan
     with open(args.plan, "r") as f:
         fill_data = json.load(f)
 
     # 3. Open PDF
     doc = fitz.open(args.pdf)
-    count = 0
 
-    # 4. Iterate over filled items
+    # --- FIX 1: FORCE RE-CALCULATION FLAG ---
+    # This tells viewers "Please re-calculate scripts and appearances"
+    doc.form_calc = True
+
+    fields_filled = 0
+
+    # 4. Execute Fill
     for item in fill_data:
-        row_id = item["row"]
-        val = item["value"]
+        row_id = item['row']
+        val = item['value']
 
-        # Retrieve geometry from CSV map
-        geo = csv_map.get(row_id)
-        if not geo:
-            print(f"Warning: JSON has Row {row_id}, but it's not in the CSV map.")
+        target = csv_map.get(row_id)
+        if not target:
             continue
 
-        # Go to specific page
-        # PDF pages are 0-indexed, our map is 1-indexed
-        page = doc[geo["page"] - 1]
-        target_rect = geo["rect"]
+        page_idx = target['page'] - 1
+        if page_idx >= len(doc):
+            continue
 
-        # Find the matching widget
+        page = doc[page_idx]
+        target_rect = target['rect']
+
+        found = False
         for widget in page.widgets():
             if rects_overlap(widget.rect, target_rect):
-                # Checkbox Logic
-                if widget.field_type in (
-                    fitz.PDF_WIDGET_TYPE_CHECKBOX,
-                    fitz.PDF_WIDGET_TYPE_RADIOBUTTON,
-                ):
-                    check = str(val).lower() in ["true", "yes", "x", "on", "1"]
-                    widget.field_value = check
+                found = True
+
+                # Checkbox / Radio
+                if widget.field_type in (fitz.PDF_WIDGET_TYPE_CHECKBOX, fitz.PDF_WIDGET_TYPE_RADIOBUTTON):
+                    is_checked = str(val).lower() in ["x", "true", "yes", "on", "1", "checked"]
+                    widget.field_value = is_checked
+                    widget.update()
+
+                # Text Fields
                 else:
-                    # Text Logic
+                    # --- FIX 2: FORCE FONT & SIZE ---
+                    # Setting the font to Helvetica ensures macOS Preview can render it.
+                    # Setting fontsize to 0 means "Auto-size" to fit the box.
+                    widget.text_font = "Helv"
+                    widget.text_fontsize = 0
+
+                    # Set the value
                     widget.field_value = str(val)
 
-                widget.update()
-                count += 1
+                    # Update (Bake appearance)
+                    widget.update()
+
+                fields_filled += 1
                 break
 
-    doc.save(args.out)
-    print(f"✓ Filled {count} fields. Saved to {args.out}")
+        if not found:
+            print(f"Warning: Could not find widget for Row {row_id}")
 
+    # --- FIX 3: SET GLOBAL NEED_APPEARANCES FLAG ---
+    # This edits the PDF Catalog to force the viewer to generate appearances
+    # if they are missing or corrupt.
+    try:
+        if doc.catalog:
+            # Get the AcroForm dictionary
+            acroform_xref = doc.xref_get_key(doc.catalog, "AcroForm")
+            if acroform_xref[0] != "null":
+                # Set NeedAppearances = true
+                xref = acroform_xref[1]
+                # If AcroForm is an indirect object (xref > 0)
+                if isinstance(xref, int) and xref > 0:
+                    doc.xref_set_key(xref, "NeedAppearances", "true")
+    except Exception as e:
+        print(f"Note: Could not set NeedAppearances flag: {e}")
+
+    # Save
+    doc.save(args.out)
+    print(f"✓ Native fill complete. {fields_filled} fields updated.")
+    print(f"✓ Saved to: {args.out}")
 
 if __name__ == "__main__":
     main()
